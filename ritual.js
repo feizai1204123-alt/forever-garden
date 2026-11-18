@@ -49,14 +49,77 @@ const candleLight=new T.PointLight('#ffb35c',0,3.4,2);candleLight.position.set(0
 
 /* ---------- Data (localStorage always, server.cjs when available). ---------- */
 const blank=()=>({flowers:0,candles:0,messages:[]});
-function cleanEntry(e){if(!e||typeof e!=='object')return blank();const n=v=>Math.min(COUNT_MAX,Math.max(0,Math.floor(+v)||0));return {flowers:n(e.flowers),candles:n(e.candles),messages:(Array.isArray(e.messages)?e.messages:[]).filter(m=>m&&typeof m.text==='string'&&typeof m.at==='string').map(m=>({text:m.text.slice(0,MESSAGE_MAX*2),at:m.at})).slice(-MESSAGES_KEPT)}}
+function cleanEntry(e){if(!e||typeof e!=='object')return blank();const n=v=>Math.min(COUNT_MAX,Math.max(0,Math.floor(+v)||0));return {flowers:n(e.flowers),candles:n(e.candles),messages:(Array.isArray(e.messages)?e.messages:[]).filter(m=>m&&typeof m.text==='string'&&typeof m.at==='string').map(m=>{const o={text:m.text.slice(0,MESSAGE_MAX*2),at:m.at};if(typeof m.id==='string')o.id=m.id.slice(0,40);if(m.pending)o.pending=true;return o}).slice(-MESSAGES_KEPT)}}
 function cleanAll(obj){const out={};if(obj&&typeof obj==='object')for(const id of Object.keys(obj))if(ID_RE.test(id)&&byId.has(id))out[id]=cleanEntry(obj[id]);return out}
-function mergeEntry(a,b){const seen=new Set(),messages=[];for(const m of [...a.messages,...b.messages]){const k=m.at+'|'+m.text;if(!seen.has(k)){seen.add(k);messages.push(m)}}messages.sort((x,y)=>x.at<y.at?-1:x.at>y.at?1:0);return {flowers:Math.max(a.flowers,b.flowers),candles:Math.max(a.candles,b.candles),messages:messages.slice(-MESSAGES_KEPT)}}
+function mergeEntry(a,b){const seen=new Set(),messages=[];for(const m of [...a.messages,...b.messages]){const k=m.id||(m.at+'|'+m.text);if(!seen.has(k)){seen.add(k);messages.push(m)}}messages.sort((x,y)=>x.at<y.at?-1:x.at>y.at?1:0);return {flowers:Math.max(a.flowers,b.flowers),candles:Math.max(a.candles,b.candles),messages:messages.slice(-MESSAGES_KEPT)}}
 let data={};try{data=cleanAll(JSON.parse(localStorage.getItem(STORE)||'{}'))}catch(e){data={}}
 const entry=id=>data[id]||(data[id]=blank());
 function saveLocal(){try{localStorage.setItem(STORE,JSON.stringify(data));return true}catch(e){return false}}
 let serverOK=false;
 async function api(method,body){const r=await fetch('/api/rituals',{method,headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined});if(!(r.headers.get('content-type')||'').includes('application/json'))throw Error('未连接花园服务');const b=await r.json();if(!r.ok)throw Error(b.error||'保存失败');return b}
+
+/* ---------- Shared online rituals (Supabase RPC, fetch only). Everyone sees everyone's flowers, candles and messages.
+   Offerings go into a pending queue in localStorage first, so they survive offline / blocked networks and sync later. ---------- */
+const SH=window.GARDEN_SHARED||{},qs=new URLSearchParams(location.search);
+const shared=!!(SH.url&&SH.key&&/^https:\/\//.test(SH.url)&&(qs.get('shared')==='1'||(SH.enabled&&qs.get('shared')!=='0')));
+const PENDING='pmg-rituals-pending-v1',REMOTE='pmg-rituals-remote-v1',DEVICE='pmg-device-id',KINDS=['flower','candle','message'];
+const uuid=()=>{if(crypto.randomUUID)return crypto.randomUUID();const b=crypto.getRandomValues(new Uint8Array(16));b[6]=b[6]&15|64;b[8]=b[8]&63|128;const h=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20)};
+const readLS=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}};
+const writeLS=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}};
+let device=String(readLS(DEVICE,'')||'');if(!/^[A-Za-z0-9_-]{8,64}$/.test(device)){device=uuid();writeLS(DEVICE,device)}
+let pending=(Array.isArray(readLS(PENDING,[]))?readLS(PENDING,[]):[]).filter(p=>p&&typeof p.cid==='string'&&ID_RE.test(p.spot)&&KINDS.includes(p.kind)&&(p.kind!=='message'||typeof p.text==='string')).slice(-200);
+let remote=cleanAll(readLS(REMOTE,{}));
+const sharedState={online:false,missing:false,lastError:'',lastSync:0};
+const savePending=()=>writeLS(PENDING,pending),saveRemote=()=>writeLS(REMOTE,remote);
+// What a spot shows in shared mode = everyone's totals (last server copy) + this device's not-yet-synced offerings.
+function compose(id){
+ const r=remote[id]||blank(),mine=pending.filter(p=>p.spot===id),ids=new Set(r.messages.map(m=>m.id).filter(Boolean));
+ const msgs=r.messages.concat(mine.filter(p=>p.kind==='message'&&!ids.has(p.cid)).map(p=>({id:p.cid,text:p.text,at:p.at,pending:true})));
+ msgs.sort((x,y)=>x.at<y.at?-1:x.at>y.at?1:0);
+ return {flowers:Math.min(COUNT_MAX,r.flowers+mine.filter(p=>p.kind==='flower').length),candles:Math.min(COUNT_MAX,r.candles+mine.filter(p=>p.kind==='candle').length),messages:msgs.slice(-MESSAGES_KEPT)};
+}
+function recompose(ids){const changed=[];for(const id of ids||spots.map(s=>s.id)){if(!byId.has(id))continue;const next=compose(id),before=data[id]?JSON.stringify(data[id]):'';if(JSON.stringify(next)!==before){data[id]=next;changed.push(id)}}
+ if(typeof renderItems==='function'){for(const id of changed)renderItems(byId.get(id));if(current&&changed.includes(current.id))renderPanel()}return changed}
+async function rpc(name,args){
+ const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),9000);
+ try{const r=await fetch(SH.url.replace(/\/+$/,'')+'/rest/v1/rpc/'+name,{method:'POST',headers:{apikey:SH.key,'Content-Type':'application/json'},body:JSON.stringify(args||{}),signal:ctl.signal,cache:'no-store'});
+  let b=null;try{b=await r.json()}catch(_){}
+  if(!r.ok){const err=Error((b&&b.message)||('HTTP '+r.status));err.status=r.status;err.code=(b&&b.code)||'';throw err}return b}
+ finally{clearTimeout(timer)}
+}
+// Server-side refusal codes (see supabase/schema.sql). Permanent ones drop the offering; the rest retry later.
+const REFUSED={has_link:'留言里不能放链接或联系方式，换一种说法吧。',bad_words:'这句话里有不太合适的词，换个温柔的说法吧。',too_long:'留言最多 200 字。',empty:'写一句想说的话吧。',spot_limit:'今天在这里已经留了很多话了，明天再来看看它吧。',daily_limit:'今天的心意已经很多了，明天再来吧。',bad_spot:'这个纪念位暂时不能留言。',bad_kind:'这个心意暂时不能保存。',bad_device:'这台设备暂时不能保存心意。',bad_request:'这个心意暂时不能保存。'};
+const RETRY={slow_down:1,busy:1};
+function noteFailure(err){
+ if(err&&(err.code==='PGRST202'||err.code==='PGRST205'||err.code==='42883'||err.status===404)){sharedState.missing=true;sharedState.lastError='not set up'}// schema not installed yet → stay local-only quietly
+ else sharedState.lastError=err&&err.message||'offline';
+ sharedState.online=false;
+}
+const outcome=new Map();let flushing=null;
+function flush(){
+ if(!shared||sharedState.missing)return Promise.resolve();
+ return flushing||(flushing=(async()=>{
+  while(pending.length){
+   const p=pending[0];
+   try{const r=await rpc('ritual_add',{p_client_id:p.cid,p_spot:p.spot,p_kind:p.kind,p_device:device,p_text:p.kind==='message'?p.text:null});
+    pending.shift();savePending();if(r&&r.entry)remote[p.spot]=cleanEntry(r.entry);saveRemote();sharedState.online=true;sharedState.lastSync=Date.now();outcome.set(p.cid,'sent');recompose([p.spot]);
+   }catch(err){
+    const code=String(err&&err.message||'');
+    if(err&&err.status>=400&&err.status<500&&err.code==='P0001'&&REFUSED[code]){pending.shift();savePending();outcome.set(p.cid,'refused:'+code);recompose([p.spot]);continue}
+    if(err&&err.code==='P0001'&&RETRY[code]){outcome.set(p.cid,'later');sharedState.online=true;break}
+    noteFailure(err);outcome.set(p.cid,'later');break;
+   }
+  }
+ })().finally(()=>{flushing=null}));
+}
+async function refresh(spotId){
+ if(!shared||sharedState.missing)return false;
+ try{const all=await rpc('ritual_summary',{p_spot:spotId||null});const clean=cleanAll(all);
+  if(spotId)remote[spotId]=clean[spotId]||blank();else remote=clean;
+  saveRemote();sharedState.online=true;sharedState.lastSync=Date.now();sharedState.lastError='';recompose(spotId?[spotId]:null);return true}
+ catch(err){noteFailure(err);return false}
+}
+if(shared)data=Object.fromEntries(spots.map(s=>[s.id,compose(s.id)]));// show the last known shared state instantly (also offline)
 
 /* ---------- 3D items ---------- */
 function renderItems(s){
@@ -87,16 +150,18 @@ function renderPanel(){
  counts.textContent=(e.flowers||e.candles||e.messages.length)?'已献花 '+e.flowers+' 束 · 已点亮 '+e.candles+' 支蜡烛 · '+e.messages.length+' 条留言':'这里还很安静。献一束花，点一盏灯，或者说几句话吧。';
  list.textContent='';
  if(!e.messages.length){const li=document.createElement('li');li.className='ritual-empty';li.textContent='还没有留言。第一句想念，可以由你写下。';list.append(li)}
- for(const m of e.messages.slice().reverse().slice(0,50)){const li=document.createElement('li'),p=document.createElement('p'),t=document.createElement('time');p.textContent=m.text;t.dateTime=m.at;t.textContent=when(m.at);li.append(p,t);list.append(li)}
+ for(const m of e.messages.slice().reverse().slice(0,50)){const li=document.createElement('li'),p=document.createElement('p'),t=document.createElement('time');p.textContent=m.text;t.dateTime=m.at;t.textContent=when(m.at)+(m.pending?' · 待同步':'');li.append(p,t);list.append(li)}
 }
 function open(s,fromKeyboard){
- if(typeof s==='string')s=byId.get(s);if(!s)return;current=s;openFrom=null;form.hidden=true;msgBtn.setAttribute('aria-expanded','false');note.textContent='';renderPanel();panel.hidden=false;prompt.hidden=true;
+ if(typeof s==='string')s=byId.get(s);if(!s)return;current=s;openFrom=null;form.hidden=true;msgBtn.setAttribute('aria-expanded','false');note.textContent='';renderPanel();panel.hidden=false;prompt.hidden=true;if(shared&&!sharedState.missing)flush().then(()=>refresh(s.id));
  if(fromKeyboard)panel.querySelector('[data-act="flower"]').focus({preventScroll:true});
 }
 function close(){if(panel.hidden)return;const hadFocus=panel.contains(document.activeElement);panel.hidden=true;current=null;if(hadFocus)canvas.focus({preventScroll:true})}
 panel.querySelector('.ritual-close').onclick=close;
 async function offer(kind,message){
- const s=current;if(!s)return;try{navigator.vibrate&&navigator.vibrate(kind==='candle'?[20,40,20]:30)}catch(_){}const e=entry(s.id);let pushed=null;
+ const s=current;if(!s)return;try{navigator.vibrate&&navigator.vibrate(kind==='candle'?[20,40,20]:30)}catch(_){}
+ if(shared)return offerShared(s,kind,message);
+ const e=entry(s.id);let pushed=null;
  if(kind==='flower')e.flowers=Math.min(COUNT_MAX,e.flowers+1);else if(kind==='candle')e.candles=Math.min(COUNT_MAX,e.candles+1);else{pushed={text:message,at:new Date().toISOString()};e.messages.push(pushed);if(e.messages.length>MESSAGES_KEPT)e.messages.splice(0,e.messages.length-MESSAGES_KEPT)}
  const savedLocal=saveLocal();renderItems(s);renderPanel();if(window.gardenAudio)window.gardenAudio.chime();
  const thanks=kind==='flower'?(e.flowers>MAX_FLOWERS?'花台上最多摆放 '+MAX_FLOWERS+' 束花，这一束的心意也已记下。':'一束花，轻轻放在了这里。'):kind==='candle'?(e.candles>MAX_CANDLES?'这里已有 '+MAX_CANDLES+' 盏烛光，这份心意也已记下。':'烛光亮起来了，愿它照亮回家的路。'):'你的话，已经留在这里了。';
@@ -104,6 +169,19 @@ async function offer(kind,message){
  try{const r=await api('POST',{id:s.id,action:kind,text:kind==='message'?message:undefined});const mine=entry(s.id);if(pushed){const i=mine.messages.indexOf(pushed);if(i>=0)mine.messages.splice(i,1)}// the server copy (with server time) replaces the optimistic one
   data[s.id]=mergeEntry(entry(s.id),cleanEntry(r.entry));saveLocal();renderItems(s);if(current===s)renderPanel();say(thanks+'（已珍藏在花园里）')}
  catch(err){say(thanks+'（暂时只保存在这台设备上：'+err.message+'）')}
+}
+function thanksFor(kind,e){return kind==='flower'?(e.flowers>MAX_FLOWERS?'花台上最多摆放 '+MAX_FLOWERS+' 束花，这一束的心意也已记下。':'一束花，轻轻放在了这里。'):kind==='candle'?(e.candles>MAX_CANDLES?'这里已有 '+MAX_CANDLES+' 盏烛光，这份心意也已记下。':'烛光亮起来了，愿它照亮回家的路。'):'你的话，已经留在这里了。'}
+async function offerShared(s,kind,message){
+ // Same link/contact rule as the database, checked here first so obvious spam never leaves the phone.
+ if(kind==='message'&&(/(https?:\/\/|www\.|[a-z0-9-]+\.(com|net|org|cn|top|xyz|io|me|cc|vip|shop|site|app|link|ly)\b|t\.me\/|@[a-z0-9_]{4,})/i.test(message)||/[0-9０-９]{7,}/.test(message))){say(REFUSED.has_link);return}
+ const p={cid:uuid(),spot:s.id,kind,text:kind==='message'?message:null,at:new Date().toISOString()};
+ pending.push(p);if(pending.length>200)pending.splice(0,pending.length-200);const saved=savePending();recompose([s.id]);if(window.gardenAudio)window.gardenAudio.chime();
+ const thanks=thanksFor(kind,data[s.id]||blank());say(thanks+'（正在送到花园里…）');
+ await flush();if(!outcome.has(p.cid)&&pending.includes(p))await flush();// a sync that was already finishing may have missed it
+ const o=outcome.get(p.cid)||'later';outcome.delete(p.cid);if(current!==s)return;
+ if(o==='sent')say(thanks+'（已珍藏在花园里，来看它的人都能看到）');
+ else if(o.startsWith('refused:'))say(REFUSED[o.slice(8)]||'这个心意暂时不能保存。');
+ else say(thanks+(saved?'（暂时保存在这台设备上，联网后会自动送到花园里）':'（浏览器未允许本地保存）'));
 }
 panel.querySelector('[data-act="flower"]').onclick=()=>offer('flower');
 panel.querySelector('[data-act="candle"]').onclick=()=>offer('candle');
@@ -143,8 +221,15 @@ function frame(t){
 }
 requestAnimationFrame(frame);
 
-/* ---------- Load from server.cjs (http only) and merge with this device's records ---------- */
-if(!window.GARDEN_STATIC&&(location.protocol==='http:'||location.protocol==='https:'))api('GET').then(remote=>{serverOK=true;const r=cleanAll(remote);for(const id of new Set([...Object.keys(data),...Object.keys(r)]))data[id]=mergeEntry(data[id]||blank(),r[id]||blank());saveLocal();spots.forEach(renderItems);renderPanel()}).catch(()=>{serverOK=false});
+/* ---------- Load: shared garden (Supabase) when configured, else server.cjs (tunnel demo), else this device only ---------- */
+if(shared){
+ const sync=()=>{if(document.hidden||sharedState.missing)return;flush().then(()=>refresh())};
+ sync();
+ // While a panel is open, poll that memorial every 30 s; the whole garden every 3 min.
+ let lastAll=Date.now();
+ setInterval(()=>{if(document.hidden||sharedState.missing)return;if(Date.now()-lastAll>180000){lastAll=Date.now();sync();return}if(current)flush().then(()=>refresh(current.id))},30000);
+ addEventListener('online',sync);document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync()});
+}else if(!window.GARDEN_STATIC&&(location.protocol==='http:'||location.protocol==='https:'))api('GET').then(remote=>{serverOK=true;const r=cleanAll(remote);for(const id of new Set([...Object.keys(data),...Object.keys(r)]))data[id]=mergeEntry(data[id]||blank(),r[id]||blank());saveLocal();spots.forEach(renderItems);renderPanel()}).catch(()=>{serverOK=false});
 
-window.gardenRituals={open,close,get data(){return data},spots};
+window.gardenRituals={open,close,get data(){return data},spots,shared:{enabled:shared,state:sharedState,get pending(){return pending.length},flush,refresh}};
 })();
