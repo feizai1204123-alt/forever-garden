@@ -1,0 +1,18 @@
+{
+ "2": {
+  "slot": 2,
+  "name": "橘子",
+  "born": "2026-11-06",
+  "departed": "2026-11-15",
+  "story": "sAAAAASdssssSd",
+  "photo": "",
+  "status": "PLACED",
+  "progress": 100,
+  "model": "generated/01a1e05c-064e-7060-b50b-ada94cfb2086.opt.glb",
+  "modelOriginal": "generated/01a1e05c-064e-7060-b50b-ada94cfb2086.glb",
+  "rotation": 0,
+  "error": "",
+  "taskId": "",
+  "createdAt": ""
+ }
+}
