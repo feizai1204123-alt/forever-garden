@@ -165,7 +165,8 @@ const dummy=new T.Object3D();function animate(t){requestAnimationFrame(animate);
 renderer.render(scene,camera);document.getElementById('loading').remove();requestAnimationFrame(animate);window.garden={scene,camera,renderer,memorials,statue:dog,reset,falling,memorialCount:memorials.length,stats:()=>({drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles})};
 const followDest=new T.Vector3();controller=window.createGardenCharacter({scene,camera,renderer,memorials,parkSpacing,walkRoutes,walkAreas,solidObjects,
  beginFollow(position){auto=false;document.getElementById('orbit').textContent='环绕漫游';document.getElementById('orbit').setAttribute('aria-pressed','false');yaw=0;pitch=1.12;distance=innerWidth<600?8.5:(window.GARDEN_MOBILE&&innerHeight<520?6.4:7);pitch=window.GARDEN_MOBILE&&innerWidth>innerHeight?1.08:1.12;target.copy(position).add(new T.Vector3(0,1.1,0));frameCamera();},
- follow(position,dt){followDest.set(position.x,position.y+1.1,position.z);target.lerp(followDest,1-Math.exp(-9*dt));frameCamera();},endFollow(){}
+ follow(position,dt){followDest.set(position.x,position.y+1.1,position.z);target.lerp(followDest,1-Math.exp(-9*dt));frameCamera();},endFollow(){},
+ getView(){return {pitch,distance}},setView(v){if(v&&v.pitch!=null)pitch=v.pitch;if(v&&v.distance!=null)distance=v.distance}
 });window.garden.controller=controller;
 
 }catch(e){document.getElementById('error').textContent='花园暂时无法显示。\n请使用支持 WebGL 的浏览器打开，并保持 vendor 文件夹与页面放在一起。\n'+e.message;console.error(e)}

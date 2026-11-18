@@ -160,6 +160,7 @@ function close(){if(panel.hidden)return;const hadFocus=panel.contains(document.a
 panel.querySelector('.ritual-close').onclick=close;
 async function offer(kind,message){
  const s=current;if(!s)return;try{navigator.vibrate&&navigator.vibrate(kind==='candle'?[20,40,20]:30)}catch(_){}
+ try{const c=g.controller;if(c&&c.active&&c.perform){const d=Math.hypot(c.actor.position.x-s.root.position.x,c.actor.position.z-s.root.position.z);if(d<s.radius+3)c.perform(kind==='flower'?'bow':kind==='candle'?'kneel':'pickup',{face:s.root.position})}}catch(_){}// the gardener bows / kneels / bends down to place the note
  if(shared)return offerShared(s,kind,message);
  const e=entry(s.id);let pushed=null;
  if(kind==='flower')e.flowers=Math.min(COUNT_MAX,e.flowers+1);else if(kind==='candle')e.candles=Math.min(COUNT_MAX,e.candles+1);else{pushed={text:message,at:new Date().toISOString()};e.messages.push(pushed);if(e.messages.length>MESSAGES_KEPT)e.messages.splice(0,e.messages.length-MESSAGES_KEPT)}
