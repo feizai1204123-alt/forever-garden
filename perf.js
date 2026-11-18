@@ -12,21 +12,24 @@ const report={mergedFrom:0,mergedInto:0};
 function mergeStatic(){
  if(!BGU||!BGU.mergeGeometries)return;
  const skip=new Set();const skipTree=o=>o&&o.traverse(c=>skip.add(c));
- for(const m of g.memorials){const u=m.group.userData;if(u.emptyMemorial||u.isPetMemorial||u.petLoaded||m.group.name==='PoodleMemorial')skipTree(m.group)}
- if(g.controller&&g.controller.actor)skipTree(g.controller.actor);
- for(const o of g.falling||[])skipTree(o);
- if(window.gardenDecor)for(const l of window.gardenDecor.lanterns||[])skipTree(l);
- scene.traverse(o=>{if(o.name&&/^Rituals_/.test(o.name))skipTree(o)});
+ const local=[];for(const m of g.memorials){const u=m.group.userData;skipTree(m.group);if(!(u.emptyMemorial||u.isPetMemorial||u.petLoaded||m.group.name==='PoodleMemorial'))local.push(m.group)}// memorial groups stay tappable (ritual raycast): merge them inside their own group
+ const dyn=new Set(),dynTree=o=>o&&o.traverse(c=>{dyn.add(c);skip.add(c)});
+ if(g.controller&&g.controller.actor)dynTree(g.controller.actor);
+ for(const o of g.falling||[])dynTree(o);
+ if(window.gardenDecor)for(const l of window.gardenDecor.lanterns||[])dynTree(l);
+ scene.traverse(o=>{if(o.name&&/^Rituals_/.test(o.name))dynTree(o)});
  scene.updateMatrixWorld(true);
- const groups=new Map(),tmp=new T.Vector3(),canon=new Map(),hx=c=>c?c.getHexString():'-';
+ const tmp=new T.Vector3(),inv=new T.Matrix4(),rel=new T.Matrix4(),canon=new Map(),hx=c=>c?c.getHexString():'-';
  // Many props build their own material instance with identical settings; share one so they can batch together.
  const sigOf=m=>[m.type,hx(m.color),hx(m.emissive),m.emissiveIntensity,m.roughness,m.metalness,m.map?m.map.uuid:'-',m.transparent,m.opacity,m.side,m.flatShading,m.vertexColors,m.alphaTest,m.depthWrite,m.depthTest,m.fog,m.toneMapped,m.blending,m.wireframe,m.envMap?m.envMap.uuid:'-',m.normalMap?m.normalMap.uuid:'-',m.emissiveMap?m.emissiveMap.uuid:'-',m.polygonOffset,m.onBeforeCompile&&m.onBeforeCompile.toString().length,m.userData&&Object.keys(m.userData).length].join('|');
  const matFor=m=>{if(!/^Mesh(Standard|Lambert|Phong|Basic)Material$/.test(m.type))return m;const k=sigOf(m);let c=canon.get(k);if(!c)canon.set(k,c=m);return c};
- scene.traverse(o=>{
-  if(!o.isMesh||o.isInstancedMesh||o.isSkinnedMesh||skip.has(o)||!o.visible||Array.isArray(o.material)||o.morphTargetInfluences)return;
+ function mergeUnder(root,parent,skipSet){
+ const groups=new Map();inv.copy(parent.matrixWorld).invert();
+ root.traverse(o=>{
+  if(!o.isMesh||o.isInstancedMesh||o.isSkinnedMesh||o.name==='MergedStatic'||(skipSet&&skipSet.has(o))||!o.visible||Array.isArray(o.material)||o.morphTargetInfluences)return;
   const geo=o.geometry;if(!geo||!geo.attributes.position||geo.morphAttributes.position)return;
   if(o.onBeforeRender!==T.Object3D.prototype.onBeforeRender)return;
-  let p=o.parent;while(p){if(!p.visible)return;p=p.parent}
+  let p=o.parent;while(p&&p!==scene){if(!p.visible)return;p=p.parent}
   if(!geo.boundingSphere)geo.computeBoundingSphere();tmp.copy(geo.boundingSphere.center).applyMatrix4(o.matrixWorld);
   if(geo.boundingSphere.radius*o.matrixWorld.getMaxScaleOnAxis()>40)return;// sky/ground stay as they are
   const attrs=['position','normal','uv'].filter(n=>geo.attributes[n]).join(',')+(o.material.vertexColors&&geo.attributes.color?',color':'');
@@ -41,14 +44,17 @@ function mergeStatic(){
    if(!e.mat.vertexColors&&geo.attributes.color)geo.deleteAttribute('color');
    if(!geo.index){const n=geo.attributes.position.count,idx=new (n>65535?Uint32Array:Uint16Array)(n);for(let i=0;i<n;i++)idx[i]=i;geo.setIndex(new T.BufferAttribute(idx,1))}
    if(!geo.attributes.normal)geo.computeVertexNormals();
-   geo.applyMatrix4(o.matrixWorld);geo.clearGroups();geos.push(geo)}
+   geo.applyMatrix4(rel.multiplyMatrices(inv,o.matrixWorld));geo.clearGroups();geos.push(geo)}
   let merged=null;try{merged=BGU.mergeGeometries(geos,false)}catch(err){ok=false}
   if(!merged||!ok)continue;
   merged.computeBoundingSphere();merged.computeBoundingBox();
-  const mesh=new T.Mesh(merged,e.mat);mesh.castShadow=e.cast;mesh.receiveShadow=e.recv;mesh.renderOrder=e.order;mesh.name='MergedStatic';mesh.matrixAutoUpdate=false;mesh.updateMatrix();scene.add(mesh);
+  const mesh=new T.Mesh(merged,e.mat);mesh.castShadow=e.cast;mesh.receiveShadow=e.recv;mesh.renderOrder=e.order;mesh.name='MergedStatic';mesh.matrixAutoUpdate=false;mesh.updateMatrix();parent.add(mesh);
   for(const o of e.list){o.parent&&o.parent.remove(o)}
   report.mergedFrom+=e.list.length;report.mergedInto++;
  }
+ }
+ mergeUnder(scene,scene,skip);
+ for(const grp of local)mergeUnder(grp,grp,dyn);
  // Static things never move again: skip their per-frame matrix recompute.
  scene.traverse(o=>{if(o.name==='MergedStatic')o.matrixAutoUpdate=false});
 }
