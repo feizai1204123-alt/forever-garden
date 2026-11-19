@@ -213,7 +213,7 @@ function frame(t){
  if(c&&c.active&&c.actor){const p=c.actor.position;let best=Infinity;for(const s of spots){if(!available(s))continue;const d=Math.hypot(p.x-s.root.position.x,p.z-s.root.position.z);if(d<s.radius&&d<best){best=d;nearSpot=s}}
   if(current){const d=Math.hypot(p.x-current.root.position.x,p.z-current.root.position.z);if(openFrom===null)openFrom=d;if(d>Math.max(openFrom,current.radius)+4)close()}}// walking away closes the panel gently
  const showPrompt=!!nearSpot&&nearSpot!==current&&!document.querySelector('dialog[open]');
- if(showPrompt){const label=coarse?'🌸 献心意 · 「'+nameOf(nearSpot)+'」':'按 E 或点这里 · 为「'+nameOf(nearSpot)+'」献上心意';if(prompt.textContent!==label)prompt.textContent=label}
+ if(showPrompt){const label=(window.gT||String)(coarse?'🌸 献心意 · 「'+nameOf(nearSpot)+'」':'按 E 或点这里 · 为「'+nameOf(nearSpot)+'」献上心意');if(prompt.textContent!==label)prompt.textContent=label}
  if(prompt.hidden===showPrompt){prompt.hidden=!showPrompt;if(showPrompt&&coarse){try{navigator.vibrate&&navigator.vibrate(12)}catch(_){}}}
  for(const f of flames){const k=.86+.1*Math.sin(time*11.3+f.phase)*Math.sin(time*7.1+f.phase*1.7)+.04*Math.sin(time*23+f.phase);f.flame.scale.set(.016,.036*k,.016);f.glow.scale.setScalar(.42*k)}
  if(t-lastLight>250){lastLight=t;const p=c&&c.active&&c.actor?c.actor.position:camera.position;let best=null,bd=16;for(const s of spots){if(!s.lit)continue;const d=Math.hypot(p.x-s.root.position.x,p.z-s.root.position.z);if(d<bd){bd=d;best=s}}

@@ -37,10 +37,10 @@ if(ios&&!standalone)for(const el of document.querySelectorAll('#rotate-tip .ios-
 // Fullscreen where the browser supports it (not iPhone Safari).
 const canFs=!ios&&(document.fullscreenEnabled||document.webkitFullscreenEnabled);
 if(canFs){
- const footer=document.querySelector('footer'),btn=document.createElement('button');btn.id='fullscreen';btn.type='button';btn.textContent='全屏';footer.prepend(btn);
+ const footer=document.querySelector('footer'),btn=document.createElement('button');btn.id='fullscreen';btn.type='button';btn.textContent=(window.gT||String)('全屏');footer.prepend(btn);
  const isFs=()=>!!(document.fullscreenElement||document.webkitFullscreenElement);
  btn.onclick=async()=>{try{if(isFs()){await(document.exitFullscreen||document.webkitExitFullscreen).call(document)}else{await(root.requestFullscreen||root.webkitRequestFullscreen).call(root,{navigationUI:'hide'});try{await screen.orientation.lock('landscape')}catch(_){}}}catch(e){console.warn('fullscreen',e)}};
- const sync=()=>{btn.textContent=isFs()?'退出全屏':'全屏'};document.addEventListener('fullscreenchange',sync);document.addEventListener('webkitfullscreenchange',sync);
+ const sync=()=>{btn.textContent=(window.gT||String)(isFs()?'退出全屏':'全屏')};document.addEventListener('fullscreenchange',sync);document.addEventListener('webkitfullscreenchange',sync);
 }
 // iOS Safari in landscape: one-time tip about Add to Home Screen.
 const tip=document.getElementById('ios-tip');
@@ -59,19 +59,19 @@ const sp=document.getElementById('splash');if(!sp)return;
 const bar=sp.querySelector('.sp-bar span'),status=sp.querySelector('.sp-status'),actions=sp.querySelector('.sp-actions');
 const ios=/iPhone|iPod/.test(navigator.userAgent),standalone=navigator.standalone||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches);
 if(ios&&!standalone)sp.querySelector('.sp-ios').hidden=false;
-if(!window.GARDEN_MOBILE)for(const li of sp.querySelectorAll('.sp-help li'))li.innerHTML=li.innerHTML.replace('左下摇杆散步，推到底奔跑','WASD / 方向键散步，Shift 奔跑').replace('右侧拖动转视角，双指缩放','拖动转视角，滚轮缩放').replace('轻触「献心意」','按 E「献心意」');
+if(!window.GARDEN_MOBILE)for(const li of sp.querySelectorAll('.sp-help li')){const g=(window.gT||String);li.innerHTML=li.innerHTML.replace('左下摇杆散步，推到底奔跑','WASD / 方向键散步，Shift 奔跑').replace('右侧拖动转视角，双指缩放','拖动转视角，滚轮缩放').replace('轻触「献心意」','按 E「献心意」').replace(g('左下摇杆散步，推到底奔跑'),g('WASD / 方向键散步，Shift 奔跑')).replace(g('右侧拖动转视角，双指缩放'),g('拖动转视角，滚轮缩放')).replace(g('走近纪念碑，轻触「献心意」'),'Walk up to a memorial and press E to pay tribute')}
 const pct=el=>{const m=el&&el.textContent.match(/(\d+)%/);return m?+m[1]:0};
 let shown=4,done=false,started=Date.now();
 const timer=setInterval(()=>{
  const g=window.garden,ch=document.getElementById('character-status'),pet=document.getElementById('pet-status'),err=document.getElementById('error');
- if(err&&err.textContent.includes('无法显示')){clearInterval(timer);sp.classList.add('gone');return}// let the WebGL error message show
+ if(err&&/无法显示|can’t be shown/i.test(err.textContent)){clearInterval(timer);sp.classList.add('gone');return}// let the WebGL error message show
  let p=8,text='正在推开花园的门… 请稍候';
  if(g){p=25;text='花园已苏醒，正在请园丁过来…';const c=g.controller,petDone=pet&&pet.dataset.loaded==='true';
   const cp=c&&c.ready?100:pct(ch),pp=petDone?100:pct(pet);p=25+cp*.45+pp*.3;
   if(c&&c.ready&&!petDone)text='园丁到了，正在安放宠物纪念像…';
-  if(ch&&/失败/.test(ch.textContent))text=ch.textContent;
+  if(ch&&/失败|failed/i.test(ch.textContent))text=ch.textContent;
   if(c&&c.ready&&petDone){p=100;text='花园准备好了'}}
- shown+=(p-shown)*.35;bar.style.width=Math.max(4,Math.min(100,shown))+'%';if(status.textContent!==text)status.textContent=text;
+ shown+=(p-shown)*.35;bar.style.width=Math.max(4,Math.min(100,shown))+'%';text=(window.gT||String)(text);if(status.textContent!==text)status.textContent=text;
  if(p>=100&&!done){done=true;actions.hidden=false;try{document.getElementById('splash-enter').focus({preventScroll:true})}catch(_){}}
  if(Date.now()-started>90000&&!done&&g){done=true;actions.hidden=false;status.textContent='网络有点慢，可以先进入花园，其余会在里面继续载入'}
 },200);
@@ -81,6 +81,6 @@ function enter(withMusic){clearInterval(timer);sp.classList.add('gone');setTimeo
 document.getElementById('splash-enter').onclick=()=>enter(true);document.getElementById('splash-quiet').onclick=()=>enter(false);
 // HUD: hide the routine "人物已就绪" status, keep important messages visible.
 const st=document.getElementById('character-status');
-if(st&&window.GARDEN_MOBILE)new MutationObserver(()=>st.classList.toggle('quiet',/已就绪/.test(st.textContent))).observe(st,{childList:true,characterData:true,subtree:true});
-addEventListener('load',()=>{for(const b of document.querySelectorAll('footer button'))if(!b.id&&b.textContent.includes('创建宠物纪念'))b.id='create-memorial'});
+if(st&&window.GARDEN_MOBILE)new MutationObserver(()=>st.classList.toggle('quiet',/已就绪|ready/i.test(st.textContent))).observe(st,{childList:true,characterData:true,subtree:true});
+addEventListener('load',()=>{for(const b of document.querySelectorAll('footer button'))if(!b.id&&/创建宠物纪念|Create a pet memorial/.test(b.textContent))b.id='create-memorial'});
 })();

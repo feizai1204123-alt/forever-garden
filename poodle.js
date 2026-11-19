@@ -1,6 +1,6 @@
 /* The user's textured poodle replaces one front-left memorial stone. */
 window.populatePoodleMemorial=function({THREE:T,group}){
- const label=document.createElement('canvas');label.width=768;label.height=128;const c=label.getContext('2d');c.fillStyle='#d2b68a';c.fillRect(0,0,768,128);c.fillStyle='#493424';c.textAlign='center';c.textBaseline='middle';c.font='48px "Microsoft YaHei",sans-serif';c.fillText('花开不忘 · 永远相伴',384,64);const texture=new T.CanvasTexture(label);texture.colorSpace=T.SRGBColorSpace;
+ const label=document.createElement('canvas');label.width=768;label.height=128;const c=label.getContext('2d');c.fillStyle='#d2b68a';c.fillRect(0,0,768,128);c.fillStyle='#493424';c.textAlign='center';c.textBaseline='middle';c.font='48px "Microsoft YaHei",sans-serif';c.fillText((window.gT||String)('花开不忘 · 永远相伴'),384,64,730);const texture=new T.CanvasTexture(label);texture.colorSpace=T.SRGBColorSpace;
  const plaque=new T.Mesh(new T.PlaneGeometry(1.8,.3),new T.MeshBasicMaterial({map:texture,transparent:true}));plaque.position.set(0,.23,.966);group.add(plaque);
  const status=document.getElementById('pet-status');status.textContent='正在载入宠物纪念像…';
  const fail=e=>{console.error('Poodle memorial loading failed',e);status.textContent='宠物纪念像载入失败，请重新打开页面。';};

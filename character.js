@@ -80,7 +80,7 @@ window.createGardenCharacter=function(api){
  addEventListener('keydown',e=>{if(!active||e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement)return;if(movementCodes.has(e.code)){e.preventDefault();keys.add(e.code);}if(e.code==='KeyR'){e.preventDefault();spawn();}if(e.code==='KeyC'&&!e.repeat){if(mode==='free')sit();else standUp();}if(e.code==='KeyH'&&!e.repeat)perform('wave',{face:camera.position});if(e.code==='Escape')setActive(false);});
  addEventListener('keyup',e=>{keys.delete(e.code);});addEventListener('blur',clear);document.addEventListener('visibilitychange',()=>{if(document.hidden)clear();});
  button.onclick=()=>setActive(!active);
- const sitPrompt=document.createElement('button');sitPrompt.id='sit-prompt';sitPrompt.type='button';sitPrompt.hidden=true;sitPrompt.textContent=window.GARDEN_MOBILE?'🪑 坐一会儿':'🪑 在长椅上坐一会儿';document.body.append(sitPrompt);
+ const sitPrompt=document.createElement('button');sitPrompt.id='sit-prompt';sitPrompt.type='button';sitPrompt.hidden=true;sitPrompt.textContent=(window.gT||String)(window.GARDEN_MOBILE?'🪑 坐一会儿':'🪑 在长椅上坐一会儿');document.body.append(sitPrompt);
  sitPrompt.onclick=()=>{sit();sitPrompt.hidden=true};
  // Tap the gardener himself → he waves back.
  {let down=null;const cv=renderer.domElement;cv.addEventListener('pointerdown',e=>{down=[e.clientX,e.clientY]});cv.addEventListener('pointerup',e=>{if(!down||!ready||!active||Math.hypot(e.clientX-down[0],e.clientY-down[1])>6)return;down=null;
@@ -107,7 +107,7 @@ window.createGardenCharacter=function(api){
     else if(mode==='gesture'&&wants&&modeTime>.35){setMode('free')}
     if(mode!=='free'){
      const fa=actor.userData.faceAngle;if(fa!=null){const dl=Math.atan2(Math.sin(fa-actor.rotation.y),Math.cos(fa-actor.rotation.y));actor.rotation.y+=dl*(1-Math.exp(-8*dt));}
-     speed=0;const stTxt=mode==='doze'?'园丁在长椅上打盹 · 推动摇杆叫醒他':mode==='sit'||mode==='sitDown'?'园丁坐下歇一会儿 · 推动摇杆起身':'人物已就绪 · 正在操控';if(status.textContent!==stTxt)status.textContent=stTxt;
+     speed=0;const stTxt=(window.gT||String)(mode==='doze'?'园丁在长椅上打盹 · 推动摇杆叫醒他':mode==='sit'||mode==='sitDown'?'园丁坐下歇一会儿 · 推动摇杆起身':'人物已就绪 · 正在操控');if(status.textContent!==stTxt)status.textContent=stTxt;
      if(sitPrompt&&!sitPrompt.hidden)sitPrompt.hidden=true;
      api.follow(actor.position,dt);mixer.update(dt);diag();return;
     }
@@ -116,7 +116,7 @@ window.createGardenCharacter=function(api){
    speed=T.MathUtils.damp(speed,desired.lengthSq()?target:0,12,dt);
    const oldX=actor.position.x,oldZ=actor.position.z;
    const blocked=navigation.move(actor.position,desired.x*speed*dt,desired.z*speed*dt);
-   const stateText=blocked?'前方有障碍 · 请绕行':'人物已就绪 · 正在操控';if(status.textContent!==stateText)status.textContent=stateText;
+   const stateText=(window.gT||String)(blocked?'前方有障碍 · 请绕行':'人物已就绪 · 正在操控');if(status.textContent!==stateText)status.textContent=stateText;
    const walked=Math.hypot(actor.position.x-oldX,actor.position.z-oldZ)>1e-5;
    if(desired.lengthSq()){const angle=Math.atan2(desired.x,desired.z),delta=Math.atan2(Math.sin(angle-actor.rotation.y),Math.cos(angle-actor.rotation.y));actor.rotation.y+=delta*(1-Math.exp(-14*dt));}
    if(walked){idleTime=0;play(running?'run':'walk');}else{idleTime+=dt;play(idleTime>8?'look':'idle');}
