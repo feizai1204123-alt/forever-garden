@@ -82,5 +82,5 @@ document.getElementById('splash-enter').onclick=()=>enter(true);document.getElem
 // HUD: hide the routine "人物已就绪" status, keep important messages visible.
 const st=document.getElementById('character-status');
 if(st&&window.GARDEN_MOBILE)new MutationObserver(()=>st.classList.toggle('quiet',/已就绪|ready/i.test(st.textContent))).observe(st,{childList:true,characterData:true,subtree:true});
-addEventListener('load',()=>{for(const b of document.querySelectorAll('footer button'))if(!b.id&&/创建宠物纪念|Create a pet memorial/.test(b.textContent))b.id='create-memorial'});
+addEventListener('load',()=>{for(const b of document.querySelectorAll('footer button'))if(!b.id&&/创建宠物纪念|Create pet memorial/.test(b.textContent))b.id='create-memorial'});
 })();

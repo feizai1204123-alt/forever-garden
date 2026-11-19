@@ -51,7 +51,7 @@ function dispose(obj){if(!obj)return;obj.parent&&obj.parent.remove(obj);obj.trav
 
 const el=(tag,props={},...kids)=>{const e=Object.assign(document.createElement(tag),props);e.append(...kids);return e};
 const style=document.createElement('style');
-style.textContent=`#pet-upload{display:inline-block}#pet3d-dialog,#pet3d-preview,#pet3d-memory{background:#37362d;color:#ffe4b4;border:1px solid #b99660;border-radius:20px;padding:22px 22px 18px;width:420px;max-width:94vw;max-height:88vh;overflow:auto;font:15px/1.75 'Microsoft YaHei',sans-serif;box-shadow:0 24px 100px #171a16aa;display:flex;flex-direction:column}#pet3d-dialog::backdrop,#pet3d-preview::backdrop,#pet3d-memory::backdrop{background:#20281dcc;backdrop-filter:blur(6px)}#pet3d-dialog h2,#pet3d-preview h2,#pet3d-memory h2{font-family:Georgia,'Microsoft YaHei',serif;letter-spacing:3px;margin:0 0 14px;font-weight:400;font-size:22px}#pet3d-dialog label{display:block;margin:10px 0 0;color:#f6e4c4}#pet3d-dialog input:not([type=file]),#pet3d-dialog select,#pet3d-dialog textarea{display:block;width:100%;margin-top:6px;padding:10px 12px;border:1px solid #ae956b77;border-radius:10px;background:#eee1c9;color:#493c2d;font:inherit}#pet3d-dialog textarea{resize:vertical;min-height:4.5em}#pet3d-dialog input[type=file]{max-width:100%;font-size:13px;color:#f6e4c4;margin-top:6px}#pet3d-dialog .hint{color:#d9c29a;font-size:12px;margin:10px 0 0;line-height:1.65}#pet3d-dialog .row,#pet3d-preview .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}#pet3d-dialog .status,#pet3d-preview .status{min-height:1.4em;color:#ffd08a;white-space:pre-wrap}#pet3d-preview canvas{display:block;width:100%;height:auto;aspect-ratio:4/3;border-radius:14px;background:#2b2924;touch-action:none;cursor:grab}#pet3d-preview input[type=range]{width:100%;accent-color:#c99a55}#pet3d-preview .facing{font-size:12px;color:#d9c29a;text-align:center;margin:6px 0 0}#pet3d-memory{width:560px;background:linear-gradient(140deg,#f5ebd8,#e2d4b9);color:#554839;border-color:#af966b}#pet3d-memory h2{text-align:center;color:#493c2d;margin:10px 0 2px}#pet3d-memory .dates{text-align:center;color:#8a7759}#pet3d-memory img{display:block;max-width:100%;max-height:42vh;object-fit:contain;margin:14px auto;border-radius:12px;box-shadow:0 8px 32px #745b3025}#pet3d-memory .story{white-space:pre-wrap;overflow-wrap:anywhere;line-height:2}#pet3d-toast{position:fixed;left:50%;top:22px;transform:translateX(-50%);z-index:7;max-width:min(560px,90vw);background:#5a4630f2;border:1px solid #e2b96baa;border-radius:24px;color:#f6dcae;padding:11px 17px;font:12px 'Microsoft YaHei',sans-serif;box-shadow:0 5px 24px #633d1912}#pet3d-toast[hidden]{display:none}#pet3d-preview-thumb{display:block;max-width:100%;max-height:160px;margin:8px auto 0;border-radius:12px}#pet3d-photo-preview{display:none;max-width:100%;max-height:120px;margin:8px 0 0;border-radius:10px;object-fit:contain}#pet3d-dialog:not([open]),#pet3d-preview:not([open]),#pet3d-memory:not([open]){display:none}footer #pet-upload::before{content:"✿ "}
+style.textContent=`#pet-upload{display:inline-block}#pet3d-dialog,#pet3d-preview,#pet3d-memory{background:#37362d;color:#ffe4b4;border:1px solid #b99660;border-radius:20px;padding:22px 22px 18px;width:420px;max-width:94vw;max-height:88vh;overflow:auto;font:15px/1.75 'Microsoft YaHei',sans-serif;box-shadow:0 24px 100px #171a16aa;display:flex;flex-direction:column}#pet3d-dialog::backdrop,#pet3d-preview::backdrop,#pet3d-memory::backdrop{background:#20281dcc;backdrop-filter:blur(6px)}#pet3d-dialog h2,#pet3d-preview h2,#pet3d-memory h2{font-family:Georgia,'Microsoft YaHei',serif;letter-spacing:3px;margin:0 0 14px;font-weight:400;font-size:22px}#pet3d-dialog label{display:block;margin:10px 0 0;color:#f6e4c4}#pet3d-dialog input:not([type=file]),#pet3d-dialog select,#pet3d-dialog textarea{display:block;width:100%;margin-top:6px;padding:10px 12px;border:1px solid #ae956b77;border-radius:10px;background:#eee1c9;color:#493c2d;font:inherit}#pet3d-dialog textarea{resize:vertical;min-height:4.5em}#pet3d-dialog input[type=file]{max-width:100%;font-size:13px;color:#f6e4c4;margin-top:6px}#pet3d-dialog .hint{color:#d9c29a;font-size:12px;margin:10px 0 0;line-height:1.65}#pet3d-dialog .row,#pet3d-preview .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}#pet3d-dialog .status,#pet3d-preview .status{min-height:1.4em;color:#ffd08a;white-space:pre-wrap}#pet3d-preview canvas{display:block;width:100%;height:auto;aspect-ratio:4/3;border-radius:14px;background:#2b2924;touch-action:none;cursor:grab}#pet3d-preview input[type=range]{width:100%;accent-color:#c99a55}#pet3d-preview .facing{font-size:12px;color:#d9c29a;text-align:center;margin:6px 0 0}#pet3d-memory{width:560px;background:linear-gradient(140deg,#f5ebd8,#e2d4b9);color:#554839;border-color:#af966b}#pet3d-memory h2{text-align:center;color:#493c2d;margin:10px 0 2px}#pet3d-memory .dates{text-align:center;color:#8a7759}#pet3d-memory img{display:block;max-width:100%;max-height:42vh;object-fit:contain;margin:14px auto;border-radius:12px;box-shadow:0 8px 32px #745b3025}#pet3d-memory .story{white-space:pre-wrap;overflow-wrap:anywhere;line-height:2}#pet3d-toast{position:fixed;left:50%;top:22px;transform:translateX(-50%);z-index:7;max-width:min(560px,90vw);background:#5a4630f2;border:1px solid #e2b96baa;border-radius:24px;color:#f6dcae;padding:11px 17px;font:12px 'Microsoft YaHei',sans-serif;box-shadow:0 5px 24px #633d1912}#pet3d-toast[hidden]{display:none}#pet3d-preview-thumb{display:block;max-width:100%;max-height:160px;margin:8px auto 0;border-radius:12px}#pet3d-photo-preview{display:none;max-width:100%;max-height:120px;margin:8px 0 0;border-radius:10px;object-fit:contain}#pet3d-dialog:not([open]),#pet3d-preview:not([open]),#pet3d-memory:not([open]){display:none}footer #pet-upload::before,footer #create-memorial::before{content:"✿ "}
 @media(max-height:420px){#pet3d-dialog,#pet3d-preview,#pet3d-memory{max-height:94vh;padding:12px 16px}#pet3d-dialog h2{margin-bottom:6px;font-size:20px}#pet3d-dialog label{margin-top:6px}}
 @media(orientation:landscape) and (max-height:500px){
  #pet3d-dialog{width:min(720px,96vw);max-height:94vh;padding:12px 16px 10px;display:flex;flex-direction:column;overflow:hidden}
@@ -199,7 +199,7 @@ form.onsubmit=async ev=>{
   if(job.status==='succeeded'){dialog.close();openPreview(job);return}
   if(job.status==='failed'){setBusy(false,job.error||MESSAGES.meshy_error);return}
   await poll(job.id);
- }catch(e){setBusy(false,e.message||MESSAGES.offline)}
+ }catch(e){if(e.code==='month_limit')try{localStorage.setItem(CAP_KEY,month())}catch(_){}setBusy(false,e.message||MESSAGES.offline)}
  finally{submitting=false}
 };
 
@@ -251,7 +251,10 @@ preview.querySelector('.do-confirm').onclick=async()=>{
 };
 
 /* ---------- Open + click handling (capture, so we take over empty pedestals from memorial-editor) ---------- */
-if(btn){btn.hidden=false;btn.textContent='上传宠物照';btn.onclick=()=>openCreate('')}
+if(btn){btn.hidden=true;btn.style.display='none'}// one footer button: memorial-editor's「创建宠物纪念」routes here via gardenPet3d.openCreate
+const CAP_KEY='pmg-pet3d-cap',month=()=>new Date().toISOString().slice(0,7);
+function capReached(){try{return localStorage.getItem(CAP_KEY)===month()}catch(_){return false}}
+function openCreateChecked(spot){if(capReached()){showToast(MESSAGES.month_limit,null);return}openCreate(spot)}
 function jobForGroup(group){const s=slots.find(s=>s.group===group);return s?jobs.get(s.spot):null}
 const canvas=g.renderer.domElement;let down=null;
 canvas.addEventListener('pointerdown',e=>{down=[e.clientX,e.clientY]});
@@ -263,7 +266,7 @@ canvas.addEventListener('pointerup',e=>{
  const s=slots.find(s=>{let p=hit.object;while(p){if(p===s.group)return true;p=p.parent}});if(!s)return;
  const job=jobs.get(s.spot);
  e.stopPropagation();if(e.stopImmediatePropagation)e.stopImmediatePropagation();
- if(!job||job.status==='failed')openCreate(s.spot);
+ if(!job||job.status==='failed')openCreateChecked(s.spot);
  else if(job.status==='placed')showMemory(job);
  else if(job.status==='succeeded')openPreview(job);
  else {showToast('「'+(job.name||'小像')+'」'+(STATUS[job.status]||'正在生成'),()=>openCreate(s.spot));if(['queued','pending','in_progress'].includes(job.status))poll(job.id)}
@@ -287,5 +290,5 @@ canvas.addEventListener('pointerup',e=>{
  }
 })();
 
-window.gardenPet3d={enabled:true,slots,jobs,openCreate,openPreview};
+window.gardenPet3d={enabled:true,slots,jobs,openCreate:openCreateChecked,openPreview};
 })();
