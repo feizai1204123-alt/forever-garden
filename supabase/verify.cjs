@@ -13,7 +13,7 @@ let fails=0;const check=(name,ok,info)=>{if(!ok)fails++;console.log((ok?'PASS ':
  const sel=await call('/rest/v1/rituals?select=*',null,'GET');check('anon cannot read the table directly',sel.status>=400||(Array.isArray(sel.j)&&sel.j.length===0),sel);
  const ins=await call('/rest/v1/rituals',{client_id:crypto.randomUUID(),spot:'m1',kind:'flower',device:'x',ip_hash:'x'});check('anon cannot insert into the table directly',ins.status>=400,ins);
  const bw=await call('/rest/v1/ritual_badwords?select=*',null,'GET');check('anon cannot read the word list',bw.status>=400||(Array.isArray(bw.j)&&bw.j.length===0),bw);
- for(const [name,a,code] of [['link refused',{text:'看 https://spam.example.com'},'has_link'],['phone number refused',{text:'加我 13812345678'},'has_link'],['bad words refused',{text:'你是傻 逼'},'bad_words'],['too long refused',{text:'想'.repeat(201)},'too_long'],['empty refused',{text:'   '},'empty'],['bad spot refused',{spot:'m99',kind:'flower'},'bad_spot'],['bad kind refused',{kind:'hug'},'bad_kind'],['bad device refused',{kind:'flower',dev:'x'},'bad_device']]){
+ for(const [name,a,code] of [['link refused',{text:'看 https://spam.example.com'},'has_link'],['phone number refused',{text:'加我 13812345678'},'has_link'],['bad words refused',{text:'你是傻 逼'},'bad_words'],['too long refused',{text:'想'.repeat(201)},'too_long'],['empty refused',{text:'   '},'empty'],['bad spot refused',{spot:'m100',kind:'flower'},'bad_spot'],['bad kind refused',{kind:'hug'},'bad_kind'],['bad device refused',{kind:'flower',dev:'x'},'bad_device']]){
   const r=await add(a);check(name+' ('+code+')',r.status===400&&r.j&&r.j.message===code,r)}
  if(WRITE){
   const cid=crypto.randomUUID();const f=await add({cid,kind:'flower'});check('add flower',f.status===200&&f.j&&f.j.ok,f);
