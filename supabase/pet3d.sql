@@ -88,7 +88,9 @@ $$;
 
 -- ---------- Atomic reserve (called only by the Edge Function with the service role) ----------
 -- Errors as short codes: bad_request, bad_device, bad_spot, bad_name, has_link, too_long,
--- daily_limit, ip_limit, month_limit, spot_taken.
+-- daily_limit (3 per device per UTC day), month_limit, spot_taken.
+-- p_skip_daily: service-role only (anon has no EXECUTE). Skips the per-device daily cap;
+-- the monthly credit cap always applies. There is no per-IP daily cap.
 create or replace function public.pet3d_reserve(
   p_id      uuid,
   p_device  text,
@@ -97,7 +99,8 @@ create or replace function public.pet3d_reserve(
   p_name    text,
   p_born    text,
   p_departed text,
-  p_story   text
+  p_story   text,
+  p_skip_daily boolean default false
 )
 returns jsonb
 language plpgsql
@@ -114,6 +117,8 @@ declare
   mon0  timestamptz := date_trunc('month', now() at time zone 'utc') at time zone 'utc';
   reserve integer := 15;
   month_cap integer := 300;
+  device_day_cap integer := 3;
+  day_count integer;
 begin
   if p_id is null then raise exception 'bad_request'; end if;
 
@@ -150,25 +155,16 @@ begin
      set status = 'failed', credits_reserved = 0, error_code = 'expired', updated_at = now()
    where status = 'queued' and meshy_task_id is null and created_at < now() - interval '10 minutes';
 
-  -- 1 generation per device per UTC day, and per IP hash per UTC day
-  -- (any job that already reserved credits or reached Meshy counts).
-  if exists (
-    select 1 from public.pet3d_jobs
+  -- 3 generations per device per UTC day (jobs that reserved credits or reached Meshy).
+  -- No per-IP daily cap. p_skip_daily (service role only) skips this check, not the monthly cap.
+  if not coalesce(p_skip_daily, false) then
+    select count(*) into day_count
+      from public.pet3d_jobs
      where device = p_device and created_at >= day0
-       and status <> 'failed'
-  ) or exists (
-    select 1 from public.pet3d_jobs
-     where device = p_device and created_at >= day0
-       and meshy_task_id is not null
-  ) then
-    raise exception 'daily_limit';
-  end if;
-  if exists (
-    select 1 from public.pet3d_jobs
-     where ip_hash = p_ip_hash and created_at >= day0
-       and (status <> 'failed' or meshy_task_id is not null)
-  ) then
-    raise exception 'ip_limit';
+       and (status <> 'failed' or meshy_task_id is not null);
+    if day_count >= device_day_cap then
+      raise exception 'daily_limit';
+    end if;
   end if;
 
   -- Monthly cap: actual usage + still-reserved active jobs.
@@ -208,9 +204,48 @@ revoke all on function public.pet3d_list() from public;
 grant execute on function public.pet3d_list() to anon, authenticated;
 -- CREATE FUNCTION also gets EXECUTE for anon/authenticated via Supabase default privileges.
 -- REVOKE FROM PUBLIC alone is not enough — visitors could call reserve directly and skip the Edge Function.
-revoke all on function public.pet3d_reserve(uuid, text, text, text, text, text, text, text) from public, anon, authenticated;
--- reserve is for the Edge Function (service role) only
-grant execute on function public.pet3d_reserve(uuid, text, text, text, text, text, text, text) to service_role;
+-- Drop the old 8-argument signature so only the service-role 9-argument form remains.
+drop function if exists public.pet3d_reserve(uuid, text, text, text, text, text, text, text);
+revoke all on function public.pet3d_reserve(uuid, text, text, text, text, text, text, text, boolean) from public, anon, authenticated;
+grant execute on function public.pet3d_reserve(uuid, text, text, text, text, text, text, text, boolean) to service_role;
+
+-- Wrong admin-code attempts (service role only). 5 failures / 10 minutes / IP hash → slow_down.
+create table if not exists public.pet3d_admin_fails (
+  id         bigint generated always as identity primary key,
+  ip_hash    text        not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists pet3d_admin_fails_ip_idx on public.pet3d_admin_fails (ip_hash, created_at desc);
+alter table public.pet3d_admin_fails enable row level security;
+revoke all on table public.pet3d_admin_fails from public, anon, authenticated;
+
+create or replace function public.pet3d_admin_attempt(p_ip_hash text, p_ok boolean default false)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  fails integer;
+begin
+  if p_ip_hash is null or p_ip_hash !~ '^[a-f0-9]{32,64}$' then raise exception 'bad_request'; end if;
+  delete from public.pet3d_admin_fails where created_at < now() - interval '15 minutes';
+  if not coalesce(p_ok, false) then
+    insert into public.pet3d_admin_fails (ip_hash) values (p_ip_hash);
+  end if;
+  select count(*) into fails
+    from public.pet3d_admin_fails
+   where ip_hash = p_ip_hash and created_at > now() - interval '10 minutes';
+  if fails >= 5 then
+    raise exception 'slow_down';
+  end if;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+revoke all on function public.pet3d_admin_attempt(text, boolean) from public, anon, authenticated;
+grant execute on function public.pet3d_admin_attempt(text, boolean) to service_role;
 
 -- ---------- Public storage bucket for finished models & thumbnails (photos stay private) ----------
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

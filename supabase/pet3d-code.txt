@@ -1,7 +1,8 @@
 // 永远的花园 · 宠物照片 → Meshy 3D
 // 把本文件全部粘贴到 Supabase Dashboard → Edge Functions → Deploy a new function → Via Editor
 // 函数名必须是：pet3d
-// 密钥：在 Edge Functions → Secrets 里添加 MESHY_API_KEY
+// 密钥：在 Edge Functions → Secrets 里添加 MESHY_API_KEY。
+// 可选：再添加 ADMIN_CODE（请自己设一个口令，不要写进代码或发给别人）。
 // SUPABASE_URL、SUPABASE_SERVICE_ROLE_KEY（或新版 SUPABASE_SECRET_KEYS）由平台自动注入，不用手动填。
 //
 // 请求：POST /functions/v1/pet3d    JSON { action, ... }
@@ -22,8 +23,9 @@ const CORS: Record<string, string> = {
 };
 
 const FRIENDLY: Record<string, string> = {
-  daily_limit: "今天这台设备已经生成过一次了，明天再来吧。每天限 1 次。",
-  ip_limit: "今天这个网络已经生成过一次了，明天再来吧。每天限 1 次。",
+  daily_limit: "今天这台设备已经生成过 3 次了，明天再来吧。每台设备每天限 3 次。",
+  ip_limit: "今天这个网络的生成次数已经用完了，请明天再试。",
+  slow_down: "尝试次数有点多，请稍后再试。",
   month_limit: "这个月的生成额度已经用完了（每月最多大约 20 只小像），下个月再来吧。",
   spot_taken: "这个纪念位已经有小像了，换一个空位吧。",
   bad_image: "请上传 1 MB 以内的 jpg、png 或 webp 照片。",
@@ -67,6 +69,33 @@ function serviceKey(): string {
 }
 function meshyKey(): string {
   return Deno.env.get("MESHY_API_KEY") || "";
+}
+
+async function timingSafeEqual(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const ah = new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode("pmg-admin\0" + a)));
+  const bh = new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode("pmg-admin\0" + b)));
+  let diff = 0;
+  for (let i = 0; i < ah.length; i++) diff |= ah[i] ^ bh[i];
+  return diff === 0;
+}
+
+// Returns true when the caller may skip the per-device daily cap. Never logs the code.
+// Wrong codes are counted per IP; 5 failures in 10 minutes → "slow_down".
+// If the SQL patch is not applied yet, a missing RPC is ignored and daily caps still apply.
+async function maybeSkipDaily(iph: string, offered: unknown): Promise<true | false | "slow_down"> {
+  const secret = (Deno.env.get("ADMIN_CODE") || "").trim();
+  const code = typeof offered === "string" ? offered : "";
+  if (!secret || !code || code.length > 128) return false;
+  if (await timingSafeEqual(secret, code)) return true;
+  try {
+    await rpc("pet3d_admin_attempt", { p_ip_hash: iph, p_ok: false });
+  } catch (e) {
+    const body = (e as any) && (e as any).body;
+    const pg = String((body && (body.code || body.message)) || (e as Error).message || "");
+    if (pg === "slow_down" || /slow_down/.test(pg)) return "slow_down";
+  }
+  return false;
 }
 
 async function sha256hex(s: string): Promise<string> {
@@ -282,7 +311,7 @@ function pgCode(err: any): string {
   const known = [
     "daily_limit","ip_limit","month_limit","spot_taken","bad_image","bad_spot",
     "bad_name","bad_device","has_link","too_long","bad_request","no_key",
-    "meshy_error","not_found","not_yours","not_ready","expired","busy",
+    "meshy_error","not_found","not_yours","not_ready","expired","busy","slow_down",
   ];
   if (known.includes(text)) return text;
   if (known.includes(msg)) return msg;
@@ -295,20 +324,35 @@ async function handleCreate(req: Request, body: any): Promise<Response> {
   if (!serviceKey() || !supabaseUrl()) return fail("busy", 503);
   const image = parseImage(String(body.image || body.image_url || ""));
   const iph = await sha256hex("pmg-pet3d:" + clientIp(req));
+  const skip = await maybeSkipDaily(iph, body && body.admin);
+  if (skip === "slow_down") return fail("slow_down", 429);
   let reserved: any;
+  const reserveArgs: Record<string, unknown> = {
+    p_id: body.client_id || body.id,
+    p_device: body.device,
+    p_ip_hash: iph,
+    p_spot: body.spot,
+    p_name: body.name,
+    p_born: body.born || null,
+    p_departed: body.departed || null,
+    p_story: body.story || null,
+  };
+  // Only send p_skip_daily when true, so an older 8-argument function still works
+  // until the SQL patch is applied (no bypass until then).
+  if (skip === true) reserveArgs.p_skip_daily = true;
   try {
-    reserved = await rpc("pet3d_reserve", {
-      p_id: body.client_id || body.id,
-      p_device: body.device,
-      p_ip_hash: iph,
-      p_spot: body.spot,
-      p_name: body.name,
-      p_born: body.born || null,
-      p_departed: body.departed || null,
-      p_story: body.story || null,
-    });
+    reserved = await rpc("pet3d_reserve", reserveArgs);
   } catch (e) {
-    return fail(pgCode(e), 400);
+    const code = pgCode(e);
+    const bodyCode = String(((e as any).body && ((e as any).body.code || (e as any).body.message)) || "");
+    // SQL not patched yet: retry without the new parameter so generation still works.
+    if (skip === true && /PGRST202|PGRST205|could not find the function|schema cache/i.test(bodyCode + code + String((e as Error).message || ""))) {
+      delete reserveArgs.p_skip_daily;
+      try { reserved = await rpc("pet3d_reserve", reserveArgs); }
+      catch (e2) { return fail(pgCode(e2), 400); }
+    } else {
+      return fail(code, 400);
+    }
   }
   const row: Job = (reserved && reserved.job) || reserved;
   const id = String(row.id);

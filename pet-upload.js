@@ -11,12 +11,13 @@ if(!enabled){if(btn)btn.hidden=true;return}
 
 const FN=SH.url.replace(/\/+$/,'')+'/functions/v1/pet3d';
 const PUBLIC=SH.url.replace(/\/+$/,'')+'/storage/v1/object/public/pet3d/';
-const STORE_DEV='pmg-device-id',STORE_MINE='pmg-pet3d-mine-v1';
+const STORE_DEV='pmg-device-id',STORE_MINE='pmg-pet3d-mine-v1',STORE_ADMIN='pmg-pet3d-admin';
 const MAX_BYTES=1024*1024,POLL_MS=4000;
 const STATUS={queued:'正在提交',pending:'排队等待生成',in_progress:'正在生成',succeeded:'已生成，等待你确认安放',placed:'已安放',failed:'生成失败'};
 const MESSAGES={
- daily_limit:'今天这台设备已经生成过一次了，明天再来吧。每天限 1 次。',
- ip_limit:'今天这个网络已经生成过一次了，明天再来吧。每天限 1 次。',
+ daily_limit:'今天这台设备已经生成过 3 次了，明天再来吧。每台设备每天限 3 次。',
+ ip_limit:'今天这个网络的生成次数已经用完了，请明天再试。',
+ slow_down:'尝试次数有点多，请稍后再试。',
  month_limit:'这个月的生成额度已经用完了（每月最多大约 20 只小像），下个月再来吧。',
  spot_taken:'这个纪念位已经有小像了，换一个空位吧。',
  bad_image:'请上传 1 MB 以内的 jpg、png 或 webp 照片。',
@@ -38,6 +39,10 @@ const uuid=()=>{if(crypto.randomUUID)return crypto.randomUUID();const b=crypto.g
 const readLS=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}};
 const writeLS=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}};
 let device=String(readLS(STORE_DEV,'')||'');if(!/^[A-Za-z0-9_-]{8,64}$/.test(device)){device=uuid();writeLS(STORE_DEV,device)}
+let adminCode='';
+try{adminCode=String(localStorage.getItem(STORE_ADMIN)||'')}catch(_){adminCode=''}
+{const raw=qs.get('admin');if(raw){adminCode=raw;try{localStorage.setItem(STORE_ADMIN,raw)}catch(_){}
+ qs.delete('admin');const next=qs.toString();if(typeof history!=='undefined'&&history.replaceState)history.replaceState(null,'',location.pathname+(next?'?'+next:'')+location.hash)}}
 let mine=(Array.isArray(readLS(STORE_MINE,[]))?readLS(STORE_MINE,[]):[]).filter(x=>x&&typeof x.id==='string').slice(-20);
 const saveMine=()=>writeLS(STORE_MINE,mine);
 const remember=job=>{if(!job||!job.id)return;const rest=mine.filter(x=>x.id!==job.id);mine=[{id:job.id,spot:job.spot,status:job.status,name:job.name,at:Date.now()},...rest].slice(0,20);saveMine()};
@@ -72,7 +77,7 @@ document.head.append(style);
 async function call(action,payload,timeoutMs){
  const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),timeoutMs||20000);
  try{
-  const r=await fetch(FN,{method:'POST',headers:{apikey:SH.key,Authorization:'Bearer '+SH.key,'Content-Type':'application/json'},body:JSON.stringify(Object.assign({action,device},payload||{})),signal:ctl.signal,cache:'no-store'});
+  const r=await fetch(FN,{method:'POST',headers:{apikey:SH.key,Authorization:'Bearer '+SH.key,'Content-Type':'application/json'},body:JSON.stringify(Object.assign({action,device},payload||{},(action==='create'&&adminCode)?{admin:adminCode}:{})),signal:ctl.signal,cache:'no-store'});
   let b=null;try{b=await r.json()}catch(_){}
   if(!b||typeof b!=='object')throw Object.assign(Error('offline'),{code:'offline'});
   if(!r.ok||b.ok===false){const err=Error(MESSAGES[b.error]||b.message||b.error||'请求失败');err.code=b.error||'busy';err.job=b.job;throw err}
@@ -154,7 +159,7 @@ function showMemory(job){if(!job)return;memory.querySelector('h2').textContent=j
 
 /* ---------- Create / progress dialog ---------- */
 const dialog=el('dialog',{id:'pet3d-dialog'});
-dialog.innerHTML='<h2>留下爱的纪念</h2><form id="pet3d-form" novalidate><p><label>空纪念位 <select id="pet3d-slot"></select></label></p><p><label>宠物名字 <input id="pet3d-name" maxlength="24" placeholder="它的名字"></label></p><p class="wide pick-wrap"><span class="pick-label">宠物照片</span><label class="photo-pick" id="pet3d-pick"><input id="pet3d-photo" type="file" accept="image/jpeg,image/png,image/webp,image/jpg" aria-label="宠物照片"><img id="pet3d-photo-preview" alt="预览"><span class="pick-copy"><b class="pick-text">📷 轻触这里，选择一张宠物照片</b><small>jpg / png / webp · 清晰的正脸或全身照最好</small></span></label></p><p><label>出生日期 <input id="pet3d-born" type="date"></label></p><p><label>离世日期 <input id="pet3d-departed" type="date"></label></p><p class="wide"><label>我们的故事 <textarea id="pet3d-story" maxlength="2000" rows="3" placeholder="写下相遇、陪伴，以及那些不想忘记的小事…"></textarea></label></p><p class="hint wide">照片会在手机上先压到 1 MB 以内。生成一只带颜色的低面数小像，大约 15 个额度；每台设备每天限 1 次。确认安放后，所有来花园的人都能看见它。</p><p class="status wide" id="pet3d-status" role="status"></p></form><div class="row"><button type="submit" form="pet3d-form" id="pet3d-submit">生成纪念小像</button><button type="button" id="pet3d-close">关闭</button></div>';
+dialog.innerHTML='<h2>留下爱的纪念</h2><form id="pet3d-form" novalidate><p><label>空纪念位 <select id="pet3d-slot"></select></label></p><p><label>宠物名字 <input id="pet3d-name" maxlength="24" placeholder="它的名字"></label></p><p class="wide pick-wrap"><span class="pick-label">宠物照片</span><label class="photo-pick" id="pet3d-pick"><input id="pet3d-photo" type="file" accept="image/jpeg,image/png,image/webp,image/jpg" aria-label="宠物照片"><img id="pet3d-photo-preview" alt="预览"><span class="pick-copy"><b class="pick-text">📷 轻触这里，选择一张宠物照片</b><small>jpg / png / webp · 清晰的正脸或全身照最好</small></span></label></p><p><label>出生日期 <input id="pet3d-born" type="date"></label></p><p><label>离世日期 <input id="pet3d-departed" type="date"></label></p><p class="wide"><label>我们的故事 <textarea id="pet3d-story" maxlength="2000" rows="3" placeholder="写下相遇、陪伴，以及那些不想忘记的小事…"></textarea></label></p><p class="hint wide">照片会在手机上先压到 1 MB 以内。生成一只带颜色的低面数小像，大约 15 个额度；每台设备每天限 3 次。确认安放后，所有来花园的人都能看见它。</p><p class="status wide" id="pet3d-status" role="status"></p></form><div class="row"><button type="submit" form="pet3d-form" id="pet3d-submit">生成纪念小像</button><button type="button" id="pet3d-close">关闭</button></div>';
 document.body.append(dialog);
 const form=dialog.querySelector('#pet3d-form'),select=dialog.querySelector('#pet3d-slot'),photoInput=dialog.querySelector('#pet3d-photo'),photoPrev=dialog.querySelector('#pet3d-photo-preview'),pick=dialog.querySelector('#pet3d-pick'),pickText=dialog.querySelector('.pick-text'),statusEl=dialog.querySelector('#pet3d-status'),submit=dialog.querySelector('#pet3d-submit');
 dialog.querySelector('#pet3d-close').onclick=()=>dialog.close();
