@@ -390,7 +390,7 @@ function makeToggle(cls){
 const css=document.createElement('style');
 css.textContent='.lang-toggle{font:12px/1 Arial,"Microsoft YaHei",sans-serif!important;letter-spacing:1px;padding:7px 11px!important;min-height:0!important;display:inline-flex;align-items:center;gap:4px;color:#f6dcae99}.lang-toggle span.on{color:#ffe6b8;font-weight:700}.lang-toggle i{font-style:normal;opacity:.45}'
 +'.lang-toggle.on-splash{position:absolute;top:calc(14px + env(safe-area-inset-top,0px));right:calc(16px + env(safe-area-inset-right,0px));z-index:5;background:#3d3931cc;border:1px solid #e2b96b55;border-radius:20px}'
-+'.lang-toggle.on-hud{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:4;background:#3d3931c4;border:1px solid #e2b96b44;border-radius:20px}'
++'.lang-toggle.on-hud{position:fixed;top:calc(var(--st,14px) + 2px);left:50%;transform:translateX(-50%);z-index:4;background:#3d3931c4;border:1px solid #e2b96b44;border-radius:20px}'
 +'html.kb-open .lang-toggle.on-hud{display:none}'
 +'html.lang-en header h1{letter-spacing:2px;white-space:nowrap}html.lang-en.mobile header h1{letter-spacing:.5px}'
 ;
