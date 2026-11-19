@@ -19,7 +19,7 @@ create table if not exists public.rituals (
   hidden      boolean     not null default false     -- owner ticks this to hide a message
 );
 alter table public.rituals drop constraint if exists rituals_spot_chk;
-alter table public.rituals add  constraint rituals_spot_chk check (spot ~ '^(m([0-9]|[1-3][0-9]|4[0-6])|statue)$');
+alter table public.rituals add  constraint rituals_spot_chk check (spot ~ '^(m([0-9]|[1-9][0-9])|statue)$');
 alter table public.rituals drop constraint if exists rituals_kind_chk;
 alter table public.rituals add  constraint rituals_kind_chk check (kind in ('flower','candle','message'));
 alter table public.rituals drop constraint if exists rituals_text_chk;
@@ -93,7 +93,7 @@ begin
   if exists (select 1 from public.rituals where client_id = p_client_id) then
     return jsonb_build_object('ok', true, 'duplicate', true, 'entry', coalesce(public.ritual_summary(p_spot) -> p_spot, '{}'::jsonb));
   end if;
-  if p_spot is null or p_spot !~ '^(m([0-9]|[1-3][0-9]|4[0-6])|statue)$' then raise exception 'bad_spot'; end if;
+  if p_spot is null or p_spot !~ '^(m([0-9]|[1-9][0-9])|statue)$' then raise exception 'bad_spot'; end if;
   if p_kind is null or p_kind not in ('flower','candle','message') then raise exception 'bad_kind'; end if;
   if p_device is null or p_device !~ '^[A-Za-z0-9_-]{8,64}$' then raise exception 'bad_device'; end if;
 

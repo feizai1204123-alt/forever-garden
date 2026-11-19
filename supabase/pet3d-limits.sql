@@ -1,6 +1,8 @@
--- 永远的花园 · 补丁：每台设备每天 3 次；取消按网络（IP）的每日限制；园主可跳过每日次数
--- 整份复制到 Supabase → SQL Editor → Run。可以重复执行。
+-- 永远的花园 · 补丁（可重复执行）：每台设备每天 3 次；取消按网络（IP）的每日限制；园主可跳过每日次数；
+-- 纪念位扩展到 m0–m99（新建不再接受三号位 m2）；献花等仪式同步放宽；增加占用位查询。
+-- 整份复制到 Supabase → SQL Editor → Run。若已经跑过较早的 pet3d-limits 补丁，再跑这一份即可，不用分开做。
 -- 每月 300 额度的上限不变。园主跳过每日次数的开关由云函数校验后传入，访客无法直接调用。
+-- 朝向（rotation）原本就有，安放后由云函数按设备校验后更新，本补丁不必改表。
 
 begin;
 
@@ -85,7 +87,7 @@ begin
   end if;
 
   if p_device is null or p_device !~ '^[A-Za-z0-9_-]{8,64}$' then raise exception 'bad_device'; end if;
-  if p_spot is null or p_spot !~ '^m([0-9]|[1-3][0-9]|4[0-6])$' then raise exception 'bad_spot'; end if;
+  if p_spot is null or p_spot !~ '^m([0-9]|[1-9][0-9])$' or p_spot = 'm2' then raise exception 'bad_spot'; end if;
   if p_ip_hash is null or p_ip_hash !~ '^[a-f0-9]{32,64}$' then raise exception 'bad_request'; end if;
 
   n := btrim(coalesce(p_name, ''));
@@ -150,6 +152,102 @@ $$;
 
 revoke all on function public.pet3d_reserve(uuid, text, text, text, text, text, text, text, boolean) from public, anon, authenticated;
 grant execute on function public.pet3d_reserve(uuid, text, text, text, text, text, text, text, boolean) to service_role;
+
+
+-- Widen allowed figurine spots (m0–m99). Keep existing m2 (Kate) valid on the table,
+-- but pet3d_reserve above refuses new jobs on m2.
+alter table public.pet3d_jobs drop constraint if exists pet3d_jobs_spot_chk;
+alter table public.pet3d_jobs add constraint pet3d_jobs_spot_chk check (spot ~ '^m([0-9]|[1-9][0-9])$');
+
+create or replace function public.pet3d_occupied()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select coalesce(jsonb_agg(j.spot order by j.spot), '[]'::jsonb)
+  from public.pet3d_jobs j
+  where j.status in ('queued','pending','in_progress','succeeded','placed');
+$$;
+revoke all on function public.pet3d_occupied() from public, anon, authenticated;
+grant execute on function public.pet3d_occupied() to service_role;
+
+-- Flowers / candles / messages may use the new pedestals (m2 still allowed).
+alter table public.rituals drop constraint if exists rituals_spot_chk;
+alter table public.rituals add constraint rituals_spot_chk check (spot ~ '^(m([0-9]|[1-9][0-9])|statue)$');
+
+create or replace function public.ritual_add(p_client_id uuid, p_spot text, p_kind text, p_device text, p_text text default null)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  hdr   json;
+  ip    text;
+  iph   text;
+  t     text;
+  flat  text;
+begin
+  if p_client_id is null then raise exception 'bad_request'; end if;
+  -- A retried request (same client_id) just returns the current state.
+  if exists (select 1 from public.rituals where client_id = p_client_id) then
+    return jsonb_build_object('ok', true, 'duplicate', true, 'entry', coalesce(public.ritual_summary(p_spot) -> p_spot, '{}'::jsonb));
+  end if;
+  if p_spot is null or p_spot !~ '^(m([0-9]|[1-9][0-9])|statue)$' then raise exception 'bad_spot'; end if;
+  if p_kind is null or p_kind not in ('flower','candle','message') then raise exception 'bad_kind'; end if;
+  if p_device is null or p_device !~ '^[A-Za-z0-9_-]{8,64}$' then raise exception 'bad_device'; end if;
+
+  begin hdr := current_setting('request.headers', true)::json; exception when others then hdr := null; end;
+  ip  := coalesce(nullif(hdr ->> 'cf-connecting-ip', ''), nullif(trim(split_part(coalesce(hdr ->> 'x-forwarded-for', ''), ',', 1)), ''), nullif(hdr ->> 'x-real-ip', ''), 'unknown');
+  iph := md5('pmg-garden:' || ip);
+
+  -- Rate limits (per IP and per device; plus a global safety valve).
+  if (select count(*) from public.rituals where ip_hash = iph and created_at > now() - interval '1 minute') >= 30
+  or (select count(*) from public.rituals where device = p_device and created_at > now() - interval '1 minute') >= 30 then
+    raise exception 'slow_down';
+  end if;
+  if (select count(*) from public.rituals where ip_hash = iph and created_at > now() - interval '1 day') >= 300
+  or (select count(*) from public.rituals where device = p_device and created_at > now() - interval '1 day') >= 300 then
+    raise exception 'daily_limit';
+  end if;
+  if (select count(*) from public.rituals where created_at > now() - interval '1 hour') >= 3000 then
+    raise exception 'busy';
+  end if;
+
+  if p_kind = 'message' then
+    t := regexp_replace(btrim(coalesce(p_text, '')), '\s+', ' ', 'g');
+    if t = '' then raise exception 'empty'; end if;
+    if char_length(t) > 200 then raise exception 'too_long'; end if;
+    -- Links / contact details (common spam).
+    if t ~* '(https?://|www\.|[a-z0-9-]+\.(com|net|org|cn|top|xyz|io|me|cc|vip|shop|site|app|link|ly)\y|t\.me/|@[a-z0-9_]{4,})'
+    or t ~ '[0-9０-９]{7,}' then
+      raise exception 'has_link';
+    end if;
+    flat := lower(regexp_replace(t, '[[:space:][:punct:]·，。！？、~～*＊_-]+', '', 'g'));
+    if exists (select 1 from public.ritual_badwords b where strpos(flat, b.word) > 0) then raise exception 'bad_words'; end if;
+    if (select count(*) from public.rituals where device = p_device and spot = p_spot and kind = 'message' and created_at > now() - interval '1 day') >= 10 then
+      raise exception 'spot_limit';
+    end if;
+  else
+    t := null;
+  end if;
+
+  insert into public.rituals (client_id, spot, kind, text, device, ip_hash)
+  values (p_client_id, p_spot, p_kind, t, p_device, iph)
+  on conflict (client_id) do nothing;
+
+  return jsonb_build_object('ok', true, 'entry', coalesce(public.ritual_summary(p_spot) -> p_spot, '{}'::jsonb));
+end;
+$$;
+
+-- ---------- Grants: anon may only execute these two functions ----------
+
+revoke all on function public.ritual_add(uuid, text, text, text, text) from public;
+grant execute on function public.ritual_add(uuid, text, text, text, text) to anon, authenticated;
+
 
 commit;
 

@@ -8,8 +8,8 @@
 // 请求：POST /functions/v1/pet3d    JSON { action, ... }
 //   action=create  提交一张 ≤1MB 的 jpeg/png/webp（data URI），开始生成
 //   action=status  查询进度；若已完成则下载 GLB 存到 Storage
-//   action=place   确认安放到花园（此后所有访客都能看到）
-//   action=list    已安放的小像列表（与 RPC pet3d_list 相同）
+//   action=place   确认安放到花园，或由同一台设备调整已安放小像的朝向
+//   action=list    已安放的小像列表；若已应用 SQL 补丁，另含 occupied 占用位
 // 不会自动重试付费的 Meshy 创建请求。
 
 const RESERVED_CREDITS = 15;
@@ -38,7 +38,7 @@ const FRIENDLY: Record<string, string> = {
   no_key: "管理员还没有配置生成密钥，请稍后再试。",
   meshy_error: "生成没有成功。如果扣了额度，Meshy 会退回。今天的次数已用掉的话，请明天再试。",
   not_found: "没有找到这次生成。",
-  not_yours: "只能查看或确认自己提交的小像。",
+  not_yours: "只能确认或调整自己提交的小像。",
   not_ready: "小像还在生成中，请再等一会儿。",
   expired: "上次提交没有发出去，请重新上传。",
   busy: "花园有点忙，请稍后再试。",
@@ -51,6 +51,20 @@ function json(body: unknown, status = 200): Response {
 }
 function fail(code: string, status = 400, extra: Record<string, unknown> = {}): Response {
   return json({ ok: false, error: code, message: FRIENDLY[code] || code, ...extra }, status);
+}
+
+// Figurines may use m0–m99 except 纪念位 3 (m2), which stays in the garden for Kate.
+const SPOT_RE = /^m([0-9]|[1-9][0-9])$/;
+const CLOSED_SPOTS = new Set(["m2"]);
+function allowedSpot(spot: unknown): boolean {
+  const s = String(spot || "");
+  return SPOT_RE.test(s) && !CLOSED_SPOTS.has(s);
+}
+function normaliseRotation(value: unknown): number | null {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return null;
+  const rot = n % 360;
+  return rot < 0 ? rot + 360 : rot;
 }
 
 function supabaseUrl(): string {
@@ -322,6 +336,7 @@ function pgCode(err: any): string {
 async function handleCreate(req: Request, body: any): Promise<Response> {
   if (!meshyKey()) return fail("no_key", 503);
   if (!serviceKey() || !supabaseUrl()) return fail("busy", 503);
+  if (!allowedSpot(body.spot)) return fail("bad_spot");
   const image = parseImage(String(body.image || body.image_url || ""));
   const iph = await sha256hex("pmg-pet3d:" + clientIp(req));
   const skip = await maybeSkipDaily(iph, body && body.admin);
@@ -465,9 +480,8 @@ async function handleStatus(body: any): Promise<Response> {
 async function handlePlace(body: any): Promise<Response> {
   const id = String(body.client_id || body.id || "");
   const device = String(body.device || "");
-  const rotation = Math.round(Number(body.rotation) || 0) % 360;
-  const rot = rotation < 0 ? rotation + 360 : rotation;
-  if (!id || !device) return fail("bad_request");
+  const rot = normaliseRotation(body.rotation);
+  if (!id || !device || rot === null) return fail("bad_request");
   const row = await getJob(id);
   if (!row) return fail("not_found", 404);
   if (String(row.device) !== device) return fail("not_yours", 403);
@@ -484,7 +498,14 @@ async function handleList(): Promise<Response> {
   try {
     const list = await rpc("pet3d_list", {});
     const jobs = (Array.isArray(list) ? list : []).map((j: Job) => publicJob(j, false));
-    return json({ ok: true, jobs });
+    let occupied = jobs.map((j) => String(j.spot || "")).filter(Boolean);
+    try {
+      const raw = await rpc("pet3d_occupied", {});
+      if (Array.isArray(raw)) occupied = raw.map((s: unknown) => String(s || "")).filter(Boolean);
+    } catch {
+      // SQL patch not applied yet: at least hide already-placed spots.
+    }
+    return json({ ok: true, jobs, occupied });
   } catch (e) {
     return fail(pgCode(e), 500);
   }

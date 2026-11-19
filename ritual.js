@@ -2,7 +2,7 @@
 (()=>{'use strict';
 const g=window.garden,T=window.THREE;if(!g||!T)return;
 const STORE='pmg-rituals-v1',MAX_FLOWERS=5,MAX_CANDLES=3,MESSAGE_MAX=200,MESSAGES_KEPT=100,COUNT_MAX=9999,NEAR=2.2;
-const ID_RE=/^(m([0-9]|[1-3][0-9]|4[0-6])|statue)$/;
+const ID_RE=/^(m([0-9]|[1-9][0-9])|statue)$/;
 const scene=g.scene,camera=g.camera,canvas=g.renderer.domElement;
 scene.updateMatrixWorld(true);
 

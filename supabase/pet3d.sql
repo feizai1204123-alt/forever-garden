@@ -34,7 +34,7 @@ create table if not exists public.pet3d_jobs (
 alter table public.pet3d_jobs drop constraint if exists pet3d_jobs_device_chk;
 alter table public.pet3d_jobs add  constraint pet3d_jobs_device_chk check (device ~ '^[A-Za-z0-9_-]{8,64}$');
 alter table public.pet3d_jobs drop constraint if exists pet3d_jobs_spot_chk;
-alter table public.pet3d_jobs add  constraint pet3d_jobs_spot_chk check (spot ~ '^m([0-9]|[1-3][0-9]|4[0-6])$');
+alter table public.pet3d_jobs add  constraint pet3d_jobs_spot_chk check (spot ~ '^m([0-9]|[1-9][0-9])$');
 alter table public.pet3d_jobs drop constraint if exists pet3d_jobs_status_chk;
 alter table public.pet3d_jobs add  constraint pet3d_jobs_status_chk check (status in ('queued','pending','in_progress','succeeded','failed','placed'));
 alter table public.pet3d_jobs drop constraint if exists pet3d_jobs_name_chk;
@@ -132,7 +132,7 @@ begin
   end if;
 
   if p_device is null or p_device !~ '^[A-Za-z0-9_-]{8,64}$' then raise exception 'bad_device'; end if;
-  if p_spot is null or p_spot !~ '^m([0-9]|[1-3][0-9]|4[0-6])$' then raise exception 'bad_spot'; end if;
+  if p_spot is null or p_spot !~ '^m([0-9]|[1-9][0-9])$' or p_spot = 'm2' then raise exception 'bad_spot'; end if;
   if p_ip_hash is null or p_ip_hash !~ '^[a-f0-9]{32,64}$' then raise exception 'bad_request'; end if;
 
   n := btrim(coalesce(p_name, ''));
@@ -202,6 +202,24 @@ $$;
 
 revoke all on function public.pet3d_list() from public;
 grant execute on function public.pet3d_list() to anon, authenticated;
+
+-- Occupied spots (queued through placed) so the upload list can hide them.
+-- Returns only spot ids; no names, photos, or device data. Service role only.
+create or replace function public.pet3d_occupied()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select coalesce(jsonb_agg(j.spot order by j.spot), '[]'::jsonb)
+  from public.pet3d_jobs j
+  where j.status in ('queued','pending','in_progress','succeeded','placed');
+$$;
+
+revoke all on function public.pet3d_occupied() from public, anon, authenticated;
+grant execute on function public.pet3d_occupied() to service_role;
+
 -- CREATE FUNCTION also gets EXECUTE for anon/authenticated via Supabase default privileges.
 -- REVOKE FROM PUBLIC alone is not enough — visitors could call reserve directly and skip the Edge Function.
 -- Drop the old 8-argument signature so only the service-role 9-argument form remains.

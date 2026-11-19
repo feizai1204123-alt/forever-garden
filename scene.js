@@ -43,7 +43,7 @@ const sculpture=new T.Group();const sculptParts=dog.children.slice(8);sculptPart
 // Engraved animal portraits on the front memorial stones.
 function animal(type,g,z){if(type==='cat'){ell([0,1.05,z],[.25,.39,.017],engrave,g);ell([0,1.49,z],[.24,.22,.018],engrave,g);for(let a of [-1,1]){let o=mesh(new T.ConeGeometry(.13,.24,3),engrave,[a*.15,1.69,z]);o.rotation.y=Math.PI/2}tube([[.13,.78,z],[.42,.79,z],[.55,.98,z],[.49,1.11,z]],.032,engrave,g)}else{ell([0,.96,z],[.24,.35,.02],engrave,g);ell([-.04,1.35,z],[.2,.2,.02],engrave,g);for(let a of [-1,1]){let o=ell([a*.1,1.65,z],[.065,.25,.02],engrave,g);o.rotation.z=a*-.23}ell([.24,.8,z],[.1,.1,.025],engrave,g)}}
 const memorials=[];
-function grave(x,z,s,type,rot=0){let g=new T.Group();g.position.set(x,0,z);g.rotation.y=rot;g.scale.setScalar(s);scene.add(g);memorials.push({x,z,s,group:g});cube([0,.16,.14],[2.3,.29,1.4],darkStone,g);if(!type && memorials.length%3===0){g.userData.emptyMemorial=true;cube([0,.32,0],[2.3,.34,1.4],lightStone,g);return g;}if(type==='poodle'){g.name='PoodleMemorial';g.userData.isPetMemorial=true;cube([0,.2,0],[2.5,.4,1.92],stone,g);cube([0,.42,0],[2.65,.13,2.02],lightStone,g);window.populatePoodleMemorial({THREE:T,group:g});shadow(x,z,3*s,2.4*s,.2);return g;}let b=slab(1.62,2.5,.32,memorials.length%4===0?lightStone:stone,g);b.position.y=.3;paw(0,2.37,.2,.6,engrave,g);if(type)animal(type,g,.205);else paw(0,1.35,.205,.85,engrave,g);for(let i=0;i<7;i++){ell([range(-.73,.73),range(.45,2.2),.215],[.025,.04,.005],darkStone,g)}shadow(x,z,3*s,2*s,.2);return g}
+function grave(x,z,s,type,rot=0){let g=new T.Group();g.position.set(x,0,z);g.rotation.y=rot;g.scale.setScalar(s);scene.add(g);memorials.push({x,z,s,group:g});cube([0,.16,.14],[2.3,.29,1.4],darkStone,g);if(type==='empty'||(!type && memorials.length%3===0)){g.userData.emptyMemorial=true;cube([0,.32,0],[2.3,.34,1.4],lightStone,g);shadow(x,z,3*s,2*s,.16);return g;}if(type==='poodle'){g.name='PoodleMemorial';g.userData.isPetMemorial=true;cube([0,.2,0],[2.5,.4,1.92],stone,g);cube([0,.42,0],[2.65,.13,2.02],lightStone,g);window.populatePoodleMemorial({THREE:T,group:g});shadow(x,z,3*s,2.4*s,.2);return g;}let b=slab(1.62,2.5,.32,memorials.length%4===0?lightStone:stone,g);b.position.y=.3;paw(0,2.37,.2,.6,engrave,g);if(type)animal(type,g,.205);else paw(0,1.35,.205,.85,engrave,g);for(let i=0;i<7;i++){ell([range(-.73,.73),range(.45,2.2),.215],[.025,.04,.005],darkStone,g)}shadow(x,z,3*s,2*s,.2);return g}
 const cat=grave(-4.35,4.25,1.23,'poodle',.13),rabbit=grave(4.3,5.25,1.21,'rabbit',-.17);
 [[-4,-1,.78],[-6,-4,.85],[4,-1.2,.93],[6,-4,.86],[-3.5,-6,.75],[2.7,-6,.9],[7,1.1,.86],[-7,1,.82],[.5,-9,.6]].forEach(a=>grave(...a,null,range(-.18,.18)));
 function bowl(g,x,z){mesh(new T.CylinderGeometry(.31,.41,.19,24),lightStone,[x,.41,z],null,g);mesh(new T.CylinderGeometry(.25,.25,.014,24),engrave,[x,.513,z],null,g);paw(x,.42,z+.37,.26,cream,g);for(let i=0;i<22;i++)ell([x+range(-.19,.19),range(.53,.59),z+range(-.15,.15)],[.035,.03,.035],wood,g)}bowl(rabbit,.1,.65);
@@ -57,6 +57,15 @@ for(const side of [-1,1])for(const x of [8.9,12.6,15.5])for(const z of [-15,-7,-
  g.scale.y*=range(.85,1.15);
 }
 for(const z of [-14.8,-18.5])for(const x of [-6.8,-3.4,0,3.4,6.8])grave(x,z,range(.64,.89),rand()<.35?'cat':null,range(-.12,.12));
+// Extra vacant pedestals for visitor figurines (append after the original 47 so existing ids stay put).
+// 纪念位 3 (m2) stays in the garden for Kate but is not offered in the upload list.
+if(memorials[2])memorials[2].group.userData.reservedMemorial=true;
+[
+ [-8.2,-20.6,.72,0],[-5.2,-20.6,.7,0],[0,-20.6,.74,0],[3.2,-20.6,.7,0],[8.2,-20.6,.72,0],
+ [-15.5,-15,.7,-Math.PI/2],[15.5,-15,.7,Math.PI/2],[-15.5,5,.7,-Math.PI/2],[15.5,5,.7,Math.PI/2],
+ [-8.5,-16.6,.68,Math.PI/2],[8.5,-16.6,.68,-Math.PI/2],[-8.5,-13.2,.68,Math.PI/2],[8.5,-13.2,.68,-Math.PI/2],
+ [-13.6,-20.4,.7,0],[13.6,-20.4,.7,0]
+].forEach(([x,z,s,rot])=>grave(x,z,s,'empty',rot));
 // Low picket fence, including the two foreground gateposts.
 function fence(x1,x2,z){for(let x=x1;x<=x2;x+=.58){cube([x,.69,z],[.16,1.25,.16],woodLight);mesh(new T.ConeGeometry(.115,.24,4),woodLight,[x,1.43,z]).rotation.y=Math.PI/4}for(let y of [.5,1.04])cube([(x1+x2)/2,y,z],[x2-x1,.13,.13],woodLight)}fence(-18,18,-22);fence(-18,-3.4,11.2);fence(3.6,18,11.2);
 for(let x of [-3.5,3.6]){cube([x,1.1,10],[.65,2.1,.65],stone);mesh(new T.ConeGeometry(.48,.35,4),lightStone,[x,2.3,10]).rotation.y=Math.PI/4;paw(x,1.4,10.335,.6,engrave,scene)}
@@ -138,7 +147,7 @@ for(let i=0;i<19000;i++){let x=range(-22,22),z=range(-27,15);if(onPath(x,z))cont
 const flowerGeometry=window.GARDEN_MOBILE?new T.SphereGeometry(1,6,4):new T.SphereGeometry(1,8,6);
 instances(new T.CylinderGeometry(1,1,1,4),stems,green,false);instances(flowerGeometry,petals,mat('#ffffff'),false);instances(flowerGeometry,centers,gold,false);instances(new T.ConeGeometry(1,1,3),grass,mat('#9ea184'),false);
 function bouquet(parent,x,z){mesh(new T.CylinderGeometry(.13,.19,.47,16),mat('#adad87',{metalness:.17,roughness:.4}),[x,.53,z],null,parent);for(let i=0;i<9;i++){let a=i*2.4,xx=x+Math.cos(a)*.27,zz=z+Math.sin(a)*.16,y=.95+rand()*.45;beam([x,.7,z],[xx,y,zz],.012,green,parent);for(let j=0;j<6;j++){let b=j/6*Math.PI*2;let p=ell([xx+Math.sin(b)*.12,y+Math.cos(b)*.12,zz],[.055,.14,.025],cream,parent);p.rotation.z=-b}ell([xx,y,zz+.035],[.055,.055,.03],gold,parent)}}bouquet(rabbit,-.66,.65);
-memorials.forEach((m,i)=>{if(i<11)return;if(i%3===0)bouquet(m.group,-.75,.55);else if(i%3===1){mesh(new T.CylinderGeometry(.1,.12,.24,10),cream,[.7,.4,.55],null,m.group);ell([.7,.55,.55],[.035,.07,.035],flame,m.group);}});
+memorials.forEach((m,i)=>{if(i<11||m.group.userData.emptyMemorial)return;if(i%3===0)bouquet(m.group,-.75,.55);else if(i%3===1){mesh(new T.CylinderGeometry(.1,.12,.24,10),cream,[.7,.4,.55],null,m.group);ell([.7,.55,.55],[.035,.07,.035],flame,m.group);}});
 // Sun disk and soft halo behind the sculpture.
 const haloCanvas=document.createElement('canvas');haloCanvas.width=haloCanvas.height=256;let hc=haloCanvas.getContext('2d'),hg=hc.createRadialGradient(128,128,0,128,128,128);hg.addColorStop(0,'rgba(255,210,139,.8)');hg.addColorStop(.17,'rgba(255,231,155,.4)');hg.addColorStop(1,'rgba(255,220,150,0)');hc.fillStyle=hg;hc.fillRect(0,0,256,256);const halo=new T.Sprite(new T.SpriteMaterial({map:new T.CanvasTexture(haloCanvas),transparent:true,depthWrite:false,blending:T.AdditiveBlending}));halo.position.set(-9,6,-25);halo.scale.set(15,15,1);scene.add(halo);
 const motes=[];for(let i=0;i<85;i++)motes.push({p:[range(-9,9),range(.5,9),range(-7,11)],s:[range(.016,.034),range(.016,.034),range(.016,.034)]});const dust=instances(sphere,motes,new T.MeshBasicMaterial({color:'#fff1be',transparent:true,opacity:.72}),false);

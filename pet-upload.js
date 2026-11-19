@@ -29,7 +29,7 @@ const MESSAGES={
  no_key:'管理员还没有配置生成密钥，请稍后再试。',
  meshy_error:'生成没有成功。请明天再试，或换一张更清晰的照片。',
  not_found:'没有找到这次生成。',
- not_yours:'只能查看或确认自己提交的小像。',
+ not_yours:'只能确认或调整自己提交的小像。',
  not_ready:'小像还在生成中，请再等一会儿。',
  expired:'上次提交没有发出去，请重新上传。',
  busy:'花园有点忙，请稍后再试。',
@@ -47,16 +47,27 @@ let mine=(Array.isArray(readLS(STORE_MINE,[]))?readLS(STORE_MINE,[]):[]).filter(
 const saveMine=()=>writeLS(STORE_MINE,mine);
 const remember=job=>{if(!job||!job.id)return;const rest=mine.filter(x=>x.id!==job.id);mine=[{id:job.id,spot:job.spot,status:job.status,name:job.name,at:Date.now()},...rest].slice(0,20);saveMine()};
 
-const slots=g.memorials.map((m,id)=>({...m,id,spot:'m'+id})).filter(m=>m.group.userData.emptyMemorial);
-const slotBySpot=spot=>slots.find(s=>s.spot===spot);
+const allSlots=g.memorials.map((m,id)=>({...m,id,spot:'m'+id})).filter(m=>m.group.userData.emptyMemorial);
+// 纪念位 3 (m2) stays visible in the garden (Kate) but is not offered for new figurines.
+const slots=allSlots.filter(s=>s.spot!=='m2'&&!s.group.userData.reservedMemorial);
+const slotBySpot=spot=>allSlots.find(s=>s.spot===spot);
 const jobs=new Map();// spot → public job (placed ones + mine)
+let occupied=new Set();
+const isMine=job=>!!(job&&job.id&&mine.some(m=>m.id===job.id));
+function markOccupied(res){
+ occupied=new Set();
+ if(res&&Array.isArray(res.occupied)){for(const s of res.occupied)if(s)occupied.add(String(s))}
+ else if(res&&Array.isArray(res.jobs)){for(const j of res.jobs)if(j&&j.spot)occupied.add(j.spot)}
+ for(const j of jobs.values())if(j&&j.spot&&j.status&&j.status!=='failed')occupied.add(j.spot);
+}
+function isBusy(spot){const j=jobs.get(spot);if(j&&j.status==='failed')return false;if(occupied.has(spot))return true;return !!(j&&j.status&&j.status!=='failed')}
 const extras=new WeakMap();
 function ex(group){let o=extras.get(group);if(!o){o={};extras.set(group,o)}return o}
 function dispose(obj){if(!obj)return;obj.parent&&obj.parent.remove(obj);obj.traverse(o=>{if(o.isMesh){o.geometry&&o.geometry.dispose();for(const m of [].concat(o.material||[])){if(!m)continue;if(m.map)m.map.dispose();m.dispose()}}})}
 
 const el=(tag,props={},...kids)=>{const e=Object.assign(document.createElement(tag),props);e.append(...kids);return e};
 const style=document.createElement('style');
-style.textContent=`#pet-upload{display:inline-block}#pet3d-dialog,#pet3d-preview,#pet3d-memory{background:#37362d;color:#ffe4b4;border:1px solid #b99660;border-radius:20px;padding:22px 22px 18px;width:420px;max-width:94vw;max-height:88vh;overflow:auto;font:15px/1.75 'Microsoft YaHei',sans-serif;box-shadow:0 24px 100px #171a16aa;display:flex;flex-direction:column}#pet3d-dialog::backdrop,#pet3d-preview::backdrop,#pet3d-memory::backdrop{background:#20281dcc;backdrop-filter:blur(6px)}#pet3d-dialog h2,#pet3d-preview h2,#pet3d-memory h2{font-family:Georgia,'Microsoft YaHei',serif;letter-spacing:3px;margin:0 0 14px;font-weight:400;font-size:22px}#pet3d-dialog label{display:block;margin:10px 0 0;color:#f6e4c4}#pet3d-dialog input:not([type=file]),#pet3d-dialog select,#pet3d-dialog textarea{display:block;width:100%;margin-top:6px;padding:10px 12px;border:1px solid #ae956b77;border-radius:10px;background:#eee1c9;color:#493c2d;font:inherit}#pet3d-dialog textarea{resize:vertical;min-height:4.5em}#pet3d-dialog input[type=file]{max-width:100%;font-size:13px;color:#f6e4c4;margin-top:6px}#pet3d-dialog .hint{color:#d9c29a;font-size:12px;margin:10px 0 0;line-height:1.65}#pet3d-dialog .row,#pet3d-preview .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}#pet3d-dialog .status,#pet3d-preview .status{min-height:1.4em;color:#ffd08a;white-space:pre-wrap}#pet3d-preview canvas{display:block;width:100%;height:auto;aspect-ratio:4/3;border-radius:14px;background:#2b2924;touch-action:none;cursor:grab}#pet3d-preview input[type=range]{width:100%;accent-color:#c99a55}#pet3d-preview .facing{font-size:12px;color:#d9c29a;text-align:center;margin:6px 0 0}#pet3d-memory{width:560px;background:linear-gradient(140deg,#f5ebd8,#e2d4b9);color:#554839;border-color:#af966b}#pet3d-memory h2{text-align:center;color:#493c2d;margin:10px 0 2px}#pet3d-memory .dates{text-align:center;color:#8a7759}#pet3d-memory img{display:block;max-width:100%;max-height:42vh;object-fit:contain;margin:14px auto;border-radius:12px;box-shadow:0 8px 32px #745b3025}#pet3d-memory .story{white-space:pre-wrap;overflow-wrap:anywhere;line-height:2}#pet3d-toast{position:fixed;left:50%;top:22px;transform:translateX(-50%);z-index:7;max-width:min(560px,90vw);background:#5a4630f2;border:1px solid #e2b96baa;border-radius:24px;color:#f6dcae;padding:11px 17px;font:12px 'Microsoft YaHei',sans-serif;box-shadow:0 5px 24px #633d1912}#pet3d-toast[hidden]{display:none}#pet3d-preview-thumb{display:block;max-width:100%;max-height:160px;margin:8px auto 0;border-radius:12px}#pet3d-photo-preview{display:none;max-width:100%;max-height:120px;margin:8px 0 0;border-radius:10px;object-fit:contain}#pet3d-dialog:not([open]),#pet3d-preview:not([open]),#pet3d-memory:not([open]){display:none}footer #pet-upload::before,footer #create-memorial::before{content:"✿ "}#pet3d-dialog>*,#pet3d-preview>*,#pet3d-memory>*{flex-shrink:0}#pet3d-dialog form p{margin:0 0 4px}#pet3d-dialog .pick-label{display:block;margin:10px 0 0;color:#f6e4c4}#pet3d-dialog .photo-pick{position:relative;display:flex;align-items:center;gap:12px;min-height:92px;margin:6px 0 0;padding:10px 14px;border:2px dashed #c9a46aaa;border-radius:14px;background:#2c2b24;color:#f6e4c4;cursor:pointer;overflow:hidden;-webkit-tap-highlight-color:transparent}#pet3d-dialog .photo-pick:active{background:#3a382f}#pet3d-dialog .photo-pick.has{border-style:solid;border-color:#b99660}#pet3d-dialog .photo-pick.need{border-color:#ffb36b;box-shadow:0 0 0 3px #ffb36b44}#pet3d-dialog .photo-pick input[type=file]{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;font-size:16px;z-index:2}#pet3d-dialog .photo-pick #pet3d-photo-preview{margin:0;max-height:72px;max-width:96px;flex:none}#pet3d-dialog .pick-copy{display:flex;flex-direction:column;gap:2px;line-height:1.4}#pet3d-dialog .pick-copy b{font-weight:600;font-size:15px}#pet3d-dialog .pick-copy small{font-size:11.5px;color:#cdb68e}#pet3d-dialog>.row{position:sticky;bottom:0;z-index:3;background:#37362d;margin:8px -16px 0;padding:8px 16px 10px;border-top:1px solid #b9966033}#pet3d-dialog input,#pet3d-dialog select,#pet3d-dialog textarea{font-size:16px}html.kb-open #pet3d-dialog[open]{margin-top:calc(var(--vvtop,0px) + 6px);margin-bottom:auto;max-height:calc(var(--vvh,100vh) - 12px)}
+style.textContent=`#pet-upload{display:inline-block}#pet3d-dialog,#pet3d-preview,#pet3d-memory{background:#37362d;color:#ffe4b4;border:1px solid #b99660;border-radius:20px;padding:22px 22px 18px;width:420px;max-width:94vw;max-height:88vh;overflow:auto;font:15px/1.75 'Microsoft YaHei',sans-serif;box-shadow:0 24px 100px #171a16aa;display:flex;flex-direction:column}#pet3d-dialog::backdrop,#pet3d-preview::backdrop,#pet3d-memory::backdrop{background:#20281dcc;backdrop-filter:blur(6px)}#pet3d-dialog h2,#pet3d-preview h2,#pet3d-memory h2{font-family:Georgia,'Microsoft YaHei',serif;letter-spacing:3px;margin:0 0 14px;font-weight:400;font-size:22px}#pet3d-dialog label{display:block;margin:10px 0 0;color:#f6e4c4}#pet3d-dialog input:not([type=file]),#pet3d-dialog select,#pet3d-dialog textarea{display:block;width:100%;margin-top:6px;padding:10px 12px;border:1px solid #ae956b77;border-radius:10px;background:#eee1c9;color:#493c2d;font:inherit}#pet3d-dialog textarea{resize:vertical;min-height:4.5em}#pet3d-dialog input[type=file]{max-width:100%;font-size:13px;color:#f6e4c4;margin-top:6px}#pet3d-dialog .hint{color:#d9c29a;font-size:12px;margin:10px 0 0;line-height:1.65}#pet3d-dialog .row,#pet3d-preview .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}#pet3d-dialog .status,#pet3d-preview .status{min-height:1.4em;color:#ffd08a;white-space:pre-wrap}#pet3d-preview canvas{display:block;width:100%;height:auto;aspect-ratio:4/3;border-radius:14px;background:#2b2924;touch-action:none;cursor:grab}#pet3d-preview input[type=range]{width:100%;accent-color:#c99a55}#pet3d-preview .facing{font-size:12px;color:#d9c29a;text-align:center;margin:6px 0 0}#pet3d-preview .path-hint{font-size:12px;color:#d9c29a;text-align:center;margin:4px 0 0;line-height:1.65}#pet3d-preview .rot-left,#pet3d-preview .rot-right{min-width:3.2em;font-size:22px;line-height:1.2;padding:6px 14px}#pet3d-preview #pet3d-rot-value{margin-left:6px}#pet3d-preview .row.actions{position:sticky;bottom:0;z-index:3;background:#37362d;margin-top:8px;padding-top:8px}#pet3d-memory .row{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:16px}#pet3d-memory .do-turn{background:#5a4630;color:#f6dcae;border:1px solid #c9a46a;border-radius:12px;padding:8px 16px;font:inherit;cursor:pointer}#pet3d-memory{width:560px;background:linear-gradient(140deg,#f5ebd8,#e2d4b9);color:#554839;border-color:#af966b}#pet3d-memory h2{text-align:center;color:#493c2d;margin:10px 0 2px}#pet3d-memory .dates{text-align:center;color:#8a7759}#pet3d-memory img{display:block;max-width:100%;max-height:42vh;object-fit:contain;margin:14px auto;border-radius:12px;box-shadow:0 8px 32px #745b3025}#pet3d-memory .story{white-space:pre-wrap;overflow-wrap:anywhere;line-height:2}#pet3d-toast{position:fixed;left:50%;top:22px;transform:translateX(-50%);z-index:7;max-width:min(560px,90vw);background:#5a4630f2;border:1px solid #e2b96baa;border-radius:24px;color:#f6dcae;padding:11px 17px;font:12px 'Microsoft YaHei',sans-serif;box-shadow:0 5px 24px #633d1912}#pet3d-toast[hidden]{display:none}#pet3d-preview-thumb{display:block;max-width:100%;max-height:160px;margin:8px auto 0;border-radius:12px}#pet3d-photo-preview{display:none;max-width:100%;max-height:120px;margin:8px 0 0;border-radius:10px;object-fit:contain}#pet3d-dialog:not([open]),#pet3d-preview:not([open]),#pet3d-memory:not([open]){display:none}footer #pet-upload::before,footer #create-memorial::before{content:"✿ "}#pet3d-dialog>*,#pet3d-preview>*,#pet3d-memory>*{flex-shrink:0}#pet3d-dialog form p{margin:0 0 4px}#pet3d-dialog .pick-label{display:block;margin:10px 0 0;color:#f6e4c4}#pet3d-dialog .photo-pick{position:relative;display:flex;align-items:center;gap:12px;min-height:92px;margin:6px 0 0;padding:10px 14px;border:2px dashed #c9a46aaa;border-radius:14px;background:#2c2b24;color:#f6e4c4;cursor:pointer;overflow:hidden;-webkit-tap-highlight-color:transparent}#pet3d-dialog .photo-pick:active{background:#3a382f}#pet3d-dialog .photo-pick.has{border-style:solid;border-color:#b99660}#pet3d-dialog .photo-pick.need{border-color:#ffb36b;box-shadow:0 0 0 3px #ffb36b44}#pet3d-dialog .photo-pick input[type=file]{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;font-size:16px;z-index:2}#pet3d-dialog .photo-pick #pet3d-photo-preview{margin:0;max-height:72px;max-width:96px;flex:none}#pet3d-dialog .pick-copy{display:flex;flex-direction:column;gap:2px;line-height:1.4}#pet3d-dialog .pick-copy b{font-weight:600;font-size:15px}#pet3d-dialog .pick-copy small{font-size:11.5px;color:#cdb68e}#pet3d-dialog>.row{position:sticky;bottom:0;z-index:3;background:#37362d;margin:8px -16px 0;padding:8px 16px 10px;border-top:1px solid #b9966033}#pet3d-dialog input,#pet3d-dialog select,#pet3d-dialog textarea{font-size:16px}html.kb-open #pet3d-dialog[open]{margin-top:calc(var(--vvtop,0px) + 6px);margin-bottom:auto;max-height:calc(var(--vvh,100vh) - 12px)}
 @media(max-height:420px){#pet3d-dialog,#pet3d-preview,#pet3d-memory{max-height:94vh;padding:12px 16px}#pet3d-dialog h2{margin-bottom:6px;font-size:20px}#pet3d-dialog label{margin-top:6px}}
 @media(orientation:landscape) and (max-height:500px){
  #pet3d-dialog{width:min(720px,96vw);max-height:94vh;max-height:calc(var(--vvh,100vh) - 12px);padding:10px 16px 0;display:block;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
@@ -68,8 +79,14 @@ style.textContent=`#pet-upload{display:inline-block}#pet3d-dialog,#pet3d-preview
  #pet3d-dialog .hint{margin-top:6px;font-size:11px}
  #pet3d-dialog .row{margin-top:6px}
  #pet3d-photo-preview{max-height:56px}
- #pet3d-preview{width:min(640px,96vw)}
+ #pet3d-preview{width:min(720px,96vw);max-height:94vh;max-height:calc(var(--vvh,100vh) - 12px);padding:8px 14px 10px;overflow:auto}
+ #pet3d-preview h2{margin:0 0 4px;font-size:18px}
+ #pet3d-preview canvas{aspect-ratio:16/9;max-height:36vh;width:100%;height:auto;object-fit:contain}
+ #pet3d-preview .facing,#pet3d-preview .path-hint{margin:2px 0 0;font-size:11px}
+ #pet3d-preview .row{margin-top:6px}#pet3d-preview .row.actions{position:sticky;bottom:0;z-index:3;background:#37362d;margin:6px -14px 0;padding:6px 14px 4px;border-top:1px solid #b9966033}
+ #pet3d-preview #pet3d-preview-thumb[hidden]{display:none}
 }
+
 @media(max-width:600px){#pet3d-toast{top:auto;bottom:250px}}`;
 document.head.append(style);
 
@@ -153,9 +170,9 @@ function placeInGarden(job){
 }
 
 /* ---------- Memory page ---------- */
-const memory=el('dialog',{id:'pet3d-memory'});memory.innerHTML='<button type="button" class="memory-close" aria-label="关闭纪念页">返回花园</button><small style="letter-spacing:3px;color:#8a7759">爱曾来过 · 永远相伴</small><h2></h2><p class="dates"></p><img alt="宠物小像预览"><p style="border-top:1px solid #bca68066;padding-top:16px;margin-top:18px;letter-spacing:2px;color:#8a7759">那些一起走过的日子</p><div class="story"></div><p style="text-align:center;color:#8a7759">愿风带去思念，愿花记得你的名字。</p>';
-document.body.append(memory);memory.querySelector('button').onclick=()=>memory.close();
-function showMemory(job){if(!job)return;memory.querySelector('h2').textContent=job.name;memory.querySelector('.dates').textContent=dates(job);const img=memory.querySelector('img');if(job.thumb_url){img.hidden=false;img.src=job.thumb_url}else{img.hidden=true;img.removeAttribute('src')}memory.querySelector('.story').textContent=job.story||'有些爱，不必用言语记下。它一直在这里。';try{memory.showModal()}catch(_){}}
+const memory=el('dialog',{id:'pet3d-memory'});memory.innerHTML='<button type="button" class="memory-close" aria-label="关闭纪念页">返回花园</button><small style="letter-spacing:3px;color:#8a7759">爱曾来过 · 永远相伴</small><h2></h2><p class="dates"></p><img alt="宠物小像预览"><p style="border-top:1px solid #bca68066;padding-top:16px;margin-top:18px;letter-spacing:2px;color:#8a7759">那些一起走过的日子</p><div class="story"></div><p style="text-align:center;color:#8a7759">愿风带去思念，愿花记得你的名字。</p><div class="row"><button type="button" class="do-turn" hidden>调整朝向</button></div>';
+document.body.append(memory);memory.querySelector('.memory-close').onclick=()=>memory.close();
+function showMemory(job){if(!job)return;memory.querySelector('h2').textContent=job.name;memory.querySelector('.dates').textContent=dates(job);const img=memory.querySelector('img');if(job.thumb_url){img.hidden=false;img.src=job.thumb_url}else{img.hidden=true;img.removeAttribute('src')}memory.querySelector('.story').textContent=job.story||'有些爱，不必用言语记下。它一直在这里。';const turn=memory.querySelector('.do-turn');turn.hidden=!(isMine(job)&&job.status==='placed');turn.onclick=()=>{memory.close();openPreview(job,true)};try{memory.showModal()}catch(_){}}
 
 /* ---------- Create / progress dialog ---------- */
 const dialog=el('dialog',{id:'pet3d-dialog'});
@@ -163,10 +180,24 @@ dialog.innerHTML='<h2>留下爱的纪念</h2><form id="pet3d-form" novalidate><p
 document.body.append(dialog);
 const form=dialog.querySelector('#pet3d-form'),select=dialog.querySelector('#pet3d-slot'),photoInput=dialog.querySelector('#pet3d-photo'),photoPrev=dialog.querySelector('#pet3d-photo-preview'),pick=dialog.querySelector('#pet3d-pick'),pickText=dialog.querySelector('.pick-text'),statusEl=dialog.querySelector('#pet3d-status'),submit=dialog.querySelector('#pet3d-submit');
 dialog.querySelector('#pet3d-close').onclick=()=>dialog.close();
-function freeSlots(){return slots.filter(s=>{const j=jobs.get(s.spot);return !j||j.status==='failed'})}
-function refreshOptions(preferred){const cur=preferred||select.value;select.textContent='';const free=freeSlots();if(!free.length){select.append(new Option('暂时没有空位',''));return}for(const s of free)select.append(new Option('纪念位 '+(s.id+1),s.spot));if(cur&&[...select.options].some(o=>o.value===cur))select.value=cur}
+function freeSlots(){return slots.filter(s=>!isBusy(s.spot))}
+function refreshOptions(preferred){
+ const free=freeSlots();select.textContent='';
+ if(!free.length){select.append(new Option('暂时没有空着的纪念位',''));select.disabled=true;submit.disabled=true;statusEl.textContent='现在没有空着的纪念位，过一会儿再来看看吧。';return false}
+ select.disabled=false;submit.disabled=false;
+ for(const s of free)select.append(new Option('纪念位 '+(s.id+1),s.spot));
+ if(preferred&&free.some(s=>s.spot===preferred))select.value=preferred;else select.value=free[0].spot;
+ return true;
+}
+async function refreshLiveJobs(){
+ try{
+  const res=await call('list',{},12000);
+  for(const job of res.jobs||[]){jobs.set(job.spot,job);if(job.status==='placed')placeInGarden(job)}
+  markOccupied(res);
+ }catch(_){markOccupied(null)}
+}
 photoInput.onchange=()=>{const f=photoInput.files&&photoInput.files[0];pick.classList.remove('need');if(!f){photoPrev.style.display='none';pick.classList.remove('has');pickText.textContent='📷 轻触这里，选择一张宠物照片';return}pick.classList.add('has');pickText.textContent='已选好照片 · 轻触可以换一张';if(statusEl.dataset.need){statusEl.textContent='';delete statusEl.dataset.need}const url=URL.createObjectURL(f);photoPrev.onload=()=>URL.revokeObjectURL(url);photoPrev.src=url;photoPrev.style.display='block'};
-function setBusy(on,text){submit.disabled=!!on;photoInput.disabled=!!on;select.disabled=!!on;if(text!=null)statusEl.textContent=text}
+function setBusy(on,text){const none=!freeSlots().length;submit.disabled=!!on||none;photoInput.disabled=!!on;select.disabled=!!on||none;if(text!=null)statusEl.textContent=text}
 let submitting=false,polling=new Set();
 
 async function poll(id){
@@ -175,7 +206,7 @@ async function poll(id){
   for(;;){
    let res;try{res=await call('status',{client_id:id})}catch(e){if(e.code==='not_found'||e.code==='not_yours')return;await new Promise(r=>setTimeout(r,POLL_MS));continue}
    const job=res.job;if(!job)return;
-   remember(job);if(job.spot)jobs.set(job.spot,job);
+   remember(job);if(job.spot){jobs.set(job.spot,job);if(job.status&&job.status!=='failed')occupied.add(job.spot);else occupied.delete(job.spot)}
    if(dialog.open&&currentPoll===id){statusEl.textContent=(STATUS[job.status]||job.status)+(job.status==='in_progress'?' '+(job.progress||0)+'%':'')}
    if(job.status==='succeeded'){if(dialog.open)dialog.close();openPreview(job);return}
    if(job.status==='placed'){await placeInGarden(job);showToast('「'+job.name+'」已经在花园里了',()=>showMemory(job));return}
@@ -195,8 +226,14 @@ form.onsubmit=async ev=>{
  if(!spot){statusEl.textContent=MESSAGES.bad_spot;return}
  if(!name){statusEl.textContent=MESSAGES.bad_name;return}
  if(born&&departed&&born>departed){statusEl.textContent='离世日期不能早于出生日期。';return}
- submitting=true;setBusy(true,'正在压缩照片…');
+ submitting=true;setBusy(true,'正在查看空位…');
  try{
+  await refreshLiveJobs();
+  if(!refreshOptions(spot)||!select.value||isBusy(select.value)||select.value!==spot){
+   setBusy(false,select.value&&select.value!==spot?'这个纪念位刚刚被占用了，已帮你换到下一个空位。请确认后再生成。':(statusEl.textContent||MESSAGES.spot_taken));
+   submitting=false;return;
+  }
+  setBusy(true,'正在压缩照片…');
   const compressed=await compress(file);
   setBusy(true,'正在提交，开始生成小像…这可能需要一两分钟。');
   const client_id=uuid();
@@ -210,50 +247,69 @@ form.onsubmit=async ev=>{
  finally{submitting=false}
 };
 
-function openCreate(spot){
- refreshOptions(spot||'');statusEl.textContent='';setBusy(false,'');
+async function openCreate(spot){
+ statusEl.textContent='';
  submit.textContent='生成纪念小像';photoInput.required=false;pickText.textContent='📷 轻触这里，选择一张宠物照片';pick.classList.remove('need','has');photoInput.value='';photoPrev.style.display='none';
+ setBusy(true,'正在查看空位…');
  try{dialog.showModal()}catch(_){}
+ await refreshLiveJobs();
+ const ok=refreshOptions(spot||'');
+ if(ok){setBusy(false,'');if(spot&&select.value!==spot)statusEl.textContent='这个纪念位刚刚被占用了，已帮你换到下一个空位。'}
+ else setBusy(false,statusEl.textContent||'现在没有空着的纪念位，过一会儿再来看看吧。');
 }
 
 /* ---------- Preview & confirm ---------- */
 const preview=el('dialog',{id:'pet3d-preview'});
-preview.innerHTML='<h2>预览小像</h2><canvas id="pet3d-canvas" width="640" height="480"></canvas><img id="pet3d-preview-thumb" alt="" hidden><p class="facing" id="pet3d-facing"></p><p><label>朝向 <input id="pet3d-rot" type="range" min="0" max="270" step="90" value="0"></label></p><div class="row"><button type="button" class="rot-left">向左转</button><button type="button" class="rot-right">向右转</button></div><p class="status" id="pet3d-pstatus" role="status"></p><div class="row"><button type="button" class="do-confirm">安放到花园</button><button type="button" class="do-cancel">稍后决定</button></div>';
+preview.innerHTML='<h2>预览小像</h2><canvas id="pet3d-canvas" width="640" height="360" aria-label="纪念小像预览，可左右拖动旋转朝向"></canvas><img id="pet3d-preview-thumb" alt="" hidden><p class="facing" id="pet3d-facing"></p><p class="path-hint">画面正前方就是花园小路，让它的脸朝向你；左右拖动可以微调，或用按钮每次转 45°。</p><div class="row"><button type="button" class="rot-left" aria-label="向左转 45 度">⟲</button><button type="button" class="rot-right" aria-label="向右转 45 度">⟳</button></div><p><label>朝向 <span id="pet3d-rot-value">0°</span><input id="pet3d-rot" type="range" min="0" max="359" step="1" value="0"></label></p><p class="status" id="pet3d-pstatus" role="status"></p><div class="row actions"><button type="button" class="do-confirm">安放到花园</button><button type="button" class="do-cancel">稍后决定</button></div>';
 document.body.append(preview);
-const pCanvas=preview.querySelector('#pet3d-canvas'),pRange=preview.querySelector('#pet3d-rot'),pStatus=preview.querySelector('#pet3d-pstatus'),pFacing=preview.querySelector('#pet3d-facing'),pThumb=preview.querySelector('#pet3d-preview-thumb');
-const facingText=deg=>{const d=((deg%360)+360)%360;return d===0?'现在正对小路 / 来看它的人':d===90?'现在朝向你的右手边':d===180?'现在背对小路':d===270?'现在朝向你的左手边':'朝向 '+d+'°'};
+const pCanvas=preview.querySelector('#pet3d-canvas'),pRange=preview.querySelector('#pet3d-rot'),pValue=preview.querySelector('#pet3d-rot-value'),pStatus=preview.querySelector('#pet3d-pstatus'),pFacing=preview.querySelector('#pet3d-facing'),pThumb=preview.querySelector('#pet3d-preview-thumb'),pConfirm=preview.querySelector('.do-confirm'),pCancel=preview.querySelector('.do-cancel'),pTitle=preview.querySelector('h2');
+const FACING={0:'现在正对小路 / 来看它的人',45:'现在偏右前方',90:'现在朝向你的右手边',135:'现在偏右后方',180:'现在背对小路',225:'现在偏左后方',270:'现在朝向你的左手边',315:'现在偏左前方'};
+const facingText=deg=>{const d=((Math.round(deg)%360)+360)%360;return FACING[d]||('朝向 '+d+'°')};
 let pv=null;
-function setRotation(deg){if(!pv)return;deg=((Math.round(deg)%360)+360)%360;pv.rotation=deg;pRange.value=String(deg);if(pv.pivot&&window.normaliseMemorialRotation){pv.pivot.rotation.y=window.normaliseMemorialRotation(deg)*Math.PI/180}pFacing.textContent=facingText(deg)}
+function setRotation(deg){if(!pv)return;deg=((Math.round(deg)%360)+360)%360;pv.rotation=deg;pRange.value=String(deg);pValue.textContent=deg+'°';if(pv.pivot&&window.normaliseMemorialRotation){pv.pivot.rotation.y=window.normaliseMemorialRotation(deg)*Math.PI/180}pFacing.textContent=facingText(deg)}
 function closePreviewScene(){if(!pv)return;cancelAnimationFrame(pv.raf);if(pv.scene)pv.scene.traverse(o=>{if(o.isMesh){o.geometry&&o.geometry.dispose();for(const m of [].concat(o.material||[])){if(!m)continue;if(m.map)m.map.dispose();m.dispose()}}});if(pv.renderer)pv.renderer.dispose();pv=null}
 preview.addEventListener('close',closePreviewScene);
-function drawPreview(){if(!pv)return;pv.model&&(pv.model.rotation.y+=0.003);pv.renderer.render(pv.scene,pv.camera);pv.raf=requestAnimationFrame(drawPreview)}
+function drawPreview(){if(!pv)return;pv.renderer.render(pv.scene,pv.camera);pv.raf=requestAnimationFrame(drawPreview)}
 function buildPreviewScene(){
  closePreviewScene();
- const renderer=new T.WebGLRenderer({canvas:pCanvas,antialias:true,alpha:false});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(pCanvas.width,pCanvas.height,false);renderer.setClearColor(0x2b2924,1);
+ const renderer=new T.WebGLRenderer({canvas:pCanvas,antialias:true,alpha:false});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));const w=Math.max(320,pCanvas.clientWidth||640),h=Math.max(150,pCanvas.clientHeight||Math.round(w*9/16));renderer.setSize(w,h,false);renderer.setClearColor(0x2b2924,1);
  const scene=new T.Scene();scene.add(new T.HemisphereLight('#fff1d2','#3a3428',1));const key=new T.DirectionalLight('#ffd9a0',1.4);key.position.set(-2,3,3);scene.add(key);
- const camera=new T.PerspectiveCamera(35,pCanvas.width/pCanvas.height,.1,50);camera.position.set(0,1.2,3.2);camera.lookAt(0,.6,0);
- pv={renderer,scene,camera,model:null,pivot:null,rotation:0,job:null,raf:0};drawPreview();
+ const ground=new T.Mesh(new T.CircleGeometry(4,36),new T.MeshStandardMaterial({color:0x4e5a3e,roughness:1}));ground.rotation.x=-Math.PI/2;scene.add(ground);
+ const path=new T.Mesh(new T.PlaneGeometry(1.3,2.4),new T.MeshStandardMaterial({color:0xb9a27f,roughness:1}));path.rotation.x=-Math.PI/2;path.position.set(0,.01,2.15);scene.add(path);
+ const camera=new T.PerspectiveCamera(35,w/h,.1,50);camera.position.set(0,1.35,3.3);camera.lookAt(0,.55,0);
+ pv={renderer,scene,camera,model:null,pivot:null,rotation:0,job:null,adjusting:false,raf:0};drawPreview();
 }
-async function openPreview(job){
- buildPreviewScene();pv.job=job;pv.rotation=job.rotation||0;setRotation(pv.rotation);
+async function openPreview(job,adjusting){
+ if(!job)return;
+ const turn=!!adjusting||job.status==='placed';
+ pTitle.textContent=turn?('调整「'+job.name+'」的朝向'):'预览小像';
+ pConfirm.textContent=turn?'保存朝向':'安放到花园';
+ pCancel.textContent=turn?'取消':'稍后决定';
  pStatus.textContent='正在载入小像…';pThumb.hidden=!job.thumb_url;if(job.thumb_url)pThumb.src=job.thumb_url;
  try{preview.showModal()}catch(_){}
+ buildPreviewScene();pv.job=job;pv.adjusting=turn;
+ const saved=Number(job.rotation);pv.rotation=Number.isFinite(saved)?((saved%360)+360)%360:0;setRotation(pv.rotation);
  try{
   const model=await loadOne(modelUrl(job));
   if(!pv||pv.job!==job)return;
-  const fit=window.fitMemorialModel(model,pv.rotation||0);
-  // Show the fitted model centred in the preview: lift the holder so the pedestal offset doesn't matter.
+  const fit=window.fitMemorialModel(model,pv.rotation);
+  // Lift slightly so the pedestal offset doesn't hide the feet; the strip in front is the garden path.
   fit.holder.position.y-=0.2;pv.scene.add(fit.holder);pv.model=fit.holder;pv.pivot=fit.pivot;setRotation(pv.rotation);
-  pStatus.textContent='这个小像还没有放进花园。转一转朝向，确认后所有来访的人都能看见它。';
+  pStatus.textContent=turn?'转一转朝向，保存后所有来访的人都会看见新的方向。':'这个小像还没有放进花园。转一转朝向，确认后所有来访的人都能看见它。';
  }catch(e){pStatus.textContent='模型载入失败：'+(e.message||e)}
 }
-preview.querySelector('.rot-left').onclick=()=>setRotation((pv?pv.rotation:0)-90);
-preview.querySelector('.rot-right').onclick=()=>setRotation((pv?pv.rotation:0)+90);
+preview.querySelector('.rot-left').onclick=()=>setRotation((pv?pv.rotation:0)-45);
+preview.querySelector('.rot-right').onclick=()=>setRotation((pv?pv.rotation:0)+45);
 pRange.oninput=()=>setRotation(+pRange.value);
-preview.querySelector('.do-cancel').onclick=()=>{const job=pv&&pv.job;preview.close();if(job)showToast('「'+job.name+'」还在等你确认 · 点这里继续预览',()=>openPreview(job))};
+let drag=null;
+pCanvas.addEventListener('pointerdown',e=>{if(!pv)return;e.preventDefault();pCanvas.setPointerCapture(e.pointerId);drag={x:e.clientX,rot:pv.rotation};pCanvas.style.cursor='grabbing'});
+pCanvas.addEventListener('pointermove',e=>{if(!drag||!pv)return;setRotation(drag.rot-(e.clientX-drag.x)*0.5)});
+const endDrag=()=>{drag=null;pCanvas.style.cursor='grab'};
+pCanvas.addEventListener('pointerup',endDrag);pCanvas.addEventListener('pointercancel',endDrag);
+preview.querySelector('.do-cancel').onclick=()=>{const job=pv&&pv.job,turn=pv&&pv.adjusting;preview.close();if(job&&!turn)showToast('「'+job.name+'」还在等你确认 · 点这里继续预览',()=>openPreview(job))};
 preview.querySelector('.do-confirm').onclick=async()=>{
- if(!pv||!pv.job)return;const job=pv.job,rotation=pv.rotation,btn=preview.querySelector('.do-confirm');btn.disabled=true;pStatus.textContent='正在安放…';
- try{const res=await call('place',{client_id:job.id,rotation});const next=res.job;remember(next);jobs.set(next.spot,next);preview.close();await placeInGarden(next);showToast('「'+next.name+'」已经安放在纪念位 · 点这里去看看',()=>showMemory(next))}
+ if(!pv||!pv.job)return;const job=pv.job,rotation=pv.rotation,turn=pv.adjusting,btn=pConfirm;btn.disabled=true;pStatus.textContent=turn?'正在保存朝向…':'正在安放…';
+ try{const res=await call('place',{client_id:job.id,rotation});const next=res.job;remember(next);jobs.set(next.spot,next);if(next.spot)occupied.add(next.spot);preview.close();await placeInGarden(next);showToast(turn?('「'+next.name+'」的朝向已经更新 · 点这里去看看'):('「'+next.name+'」已经安放在纪念位 · 点这里去看看'),()=>showMemory(next))}
  catch(e){pStatus.textContent=e.message||MESSAGES.offline}finally{btn.disabled=false}
 };
 
@@ -261,22 +317,27 @@ preview.querySelector('.do-confirm').onclick=async()=>{
 if(btn){btn.hidden=true;btn.style.display='none'}// one footer button: memorial-editor's「创建宠物纪念」routes here via gardenPet3d.openCreate
 const CAP_KEY='pmg-pet3d-cap',month=()=>new Date().toISOString().slice(0,7);
 function capReached(){try{return localStorage.getItem(CAP_KEY)===month()}catch(_){return false}}
-function openCreateChecked(spot){if(capReached()){showToast(MESSAGES.month_limit,null);return}openCreate(spot)}
-function jobForGroup(group){const s=slots.find(s=>s.group===group);return s?jobs.get(s.spot):null}
+function openCreateChecked(spot){if(capReached()){showToast(MESSAGES.month_limit,null);return}return openCreate(spot)}
+function jobForGroup(group){const s=allSlots.find(s=>s.group===group);return s?jobs.get(s.spot):null}
 const canvas=g.renderer.domElement;let down=null;
 canvas.addEventListener('pointerdown',e=>{down=[e.clientX,e.clientY]});
 canvas.addEventListener('pointerup',e=>{
  if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>5||document.querySelector('dialog[open]'))return;
  const rect=canvas.getBoundingClientRect();
  const ray=new T.Raycaster();ray.setFromCamera(new T.Vector2((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1),g.camera);
- const hit=ray.intersectObjects(slots.map(s=>s.group),true)[0];if(!hit)return;
- const s=slots.find(s=>{let p=hit.object;while(p){if(p===s.group)return true;p=p.parent}});if(!s)return;
+ const hit=ray.intersectObjects(allSlots.map(s=>s.group),true)[0];if(!hit)return;
+ const s=allSlots.find(s=>{let p=hit.object;while(p){if(p===s.group)return true;p=p.parent}});if(!s)return;
  const job=jobs.get(s.spot);
  e.stopPropagation();if(e.stopImmediatePropagation)e.stopImmediatePropagation();
- if(!job||job.status==='failed')openCreateChecked(s.spot);
- else if(job.status==='placed')showMemory(job);
- else if(job.status==='succeeded')openPreview(job);
- else {showToast('「'+(job.name||'小像')+'」'+(STATUS[job.status]||'正在生成'),()=>openCreate(s.spot));if(['queued','pending','in_progress'].includes(job.status))poll(job.id)}
+ const creatable=slots.includes(s);
+ if(job&&job.status==='placed'){showMemory(job);return}
+ if(job&&job.status==='succeeded'){if(isMine(job))openPreview(job);else showToast('这里已经有人在安放小像了，请换一个空位。',null);return}
+ if(job&&job.status!=='failed'){
+  if(isMine(job)){showToast('「'+(job.name||'小像')+'」'+(STATUS[job.status]||'正在生成'),null);if(['queued','pending','in_progress'].includes(job.status))poll(job.id)}
+  else showToast('这里已经有人在安放小像了，请换一个空位。',null);
+  return;
+ }
+ if(creatable)openCreateChecked(s.spot);
 },true);
 
 /* ---------- Load everyone's placed pets, and resume my in-flight job ---------- */
@@ -284,12 +345,14 @@ canvas.addEventListener('pointerup',e=>{
  try{
   const res=await call('list',{},12000);
   for(const job of res.jobs||[]){jobs.set(job.spot,job);placeInGarden(job)}
+  markOccupied(res);
  }catch(e){/* function or schema not installed yet — stay quiet, the button still explains on submit */}
  for(const m of mine){
   if(!m.id)continue;
   try{
    const res=await call('status',{client_id:m.id});
    const job=res.job;if(!job)continue;remember(job);jobs.set(job.spot,job);
+   if(job.spot&&job.status&&job.status!=='failed')occupied.add(job.spot);
    if(job.status==='placed')placeInGarden(job);
    else if(job.status==='succeeded')showToast('「'+job.name+'」已经生成好了 · 点这里预览并安放',()=>openPreview(job));
    else if(job.status==='queued'||job.status==='pending'||job.status==='in_progress'){showToast('「'+job.name+'」还在生成中',()=>{});poll(job.id)}
