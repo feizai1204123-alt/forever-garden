@@ -44,7 +44,7 @@ window.createGardenCharacter=function(api){
  function nearSeat(){if(!seats.length)return null;let best=null,bd=.95;for(const st of seats){const d=Math.hypot(actor.position.x-st.fx,actor.position.z-st.fz);if(d<bd){bd=d;best=st}}return best}
  function faceTo(x,z){actor.userData.faceAngle=Math.atan2(x-actor.position.x,z-actor.position.z)}
  function setMode(m){mode=m;modeTime=0}
- function sit(st){st=st||nearSeat();if(!st||!actions.sitDown||mode!=='free')return false;seat=st;clear();
+ function sit(st){st=st||nearSeat();if(!st||!actions.sitDown||mode!=='free')return false;seat=st;clear();preSit=allowed(actor.position.x,actor.position.z)?{x:actor.position.x,z:actor.position.z}:null;
   actor.position.set(st.x+st.dir.x*.12,st.top-SIT_OFFSET-SIT_DROP[st.kind],st.z+st.dir.z*.12);actor.rotation.y=st.angle;actor.userData.faceAngle=null;
   setMode('sitDown');seatIdle=0;play('sitDown',{fade:.35});if(st.kind==='pavilion'&&api.getView){savedView=api.getView();api.setView({pitch:1.3,distance:3.8})}return true}
  function standUp(){if(mode!=='sit'&&mode!=='doze'&&mode!=='sitDown')return;setMode('standUp');play('standUp',{fade:.3,timeScale:1.7})}
@@ -59,11 +59,17 @@ window.createGardenCharacter=function(api){
  function onFinished(e){
   if(e.action!==currentAction)return;
   if(mode==='sitDown'){setMode('sit');play('sitIdle',{fade:.45})}
-  else if(mode==='standUp'){const st=seat;seat=null;if(st){actor.position.set(st.fx,actor.position.y,st.fz);seatCooldown=st}if(savedView){api.setView(savedView);savedView=null}setMode('free');idleTime=0;play('idle',{fade:.35})}
+  else if(mode==='standUp'){const st=seat;seat=null;if(st){const p=standSpot(st);actor.position.set(p.x,actor.position.y,p.z);seatCooldown=st}speed=0;stoodAt=clock;stuckTime=0;if(savedView){api.setView(savedView);savedView=null}setMode('free');idleTime=0;play('idle',{fade:.35})}
   else if(mode==='kneelHold'){if(actor.userData.kneelStage===0){actor.userData.kneelStage=1;modeTime=0;}else{setMode('free');play('idle',{fade:.3})}}
   else if(mode==='gesture'){setMode('free');idleTime=0;play('idle',{fade:.35})}
  }
- let SIT_OFFSET=.5,savedView=null,seatCooldown=null;
+ let SIT_OFFSET=.5,savedView=null,seatCooldown=null,preSit=null,stoodAt=-1e9,stuckTime=0;
+ // Nearest walkable point to (x,z), searching rings outward; pref = preferred direction (radians, atan2(dx,dz)).
+ function freeSpot(x,z,maxR,pref){if(allowed(x,z))return {x,z};for(let r=.1;r<=maxR+1e-6;r+=.1){const n=Math.max(8,Math.round(r*24));let best=null,bd=1e9;for(let i=0;i<n;i++){const a=i/n*Math.PI*2,px=x+Math.sin(a)*r,pz=z+Math.cos(a)*r;if(!allowed(px,pz))continue;const da=pref==null?0:Math.abs(Math.atan2(Math.sin(a-pref),Math.cos(a-pref)));if(da<bd){bd=da;best={x:px,z:pz}}}if(best)return best}return null}
+ // Where to stand after leaving a seat: straight in front if walkable, else where he stood before sitting, else the nearest free spot.
+ function standSpot(st){for(const d of [.95,1.1,1.25,1.4,1.6,1.8]){const x=st.x+st.dir.x*d,z=st.z+st.dir.z*d;if(allowed(x,z))return {x,z}}
+  if(preSit&&allowed(preSit.x,preSit.z)&&Math.hypot(preSit.x-st.x,preSit.z-st.z)<3)return preSit;
+  return freeSpot(st.fx,st.fz,3,Math.atan2(st.dir.x,st.dir.z))||{x:st.fx,z:st.fz}}
  findSeats();// now, before perf.js merges the bench meshes into batches
  function clear(){keys.clear();touchKeys.clear();speed=0;velocity.set(0,0,0);}
  function setActive(value){
@@ -72,7 +78,7 @@ window.createGardenCharacter=function(api){
   pad.hidden=!value;document.body.classList.toggle('controlling-character',value);
   const touch=window.GARDEN_MOBILE;hint.textContent=value?(touch?'左下摇杆移动 · 推到底奔跑 · 右侧单指拖动转视角':'WASD / 方向键自由移动 · Shift 奔跑 · R 回到入口'):(touch?'单指拖动环顾 · 双指缩放':'拖动环顾 · 滚轮缩放 · 双击回到最初');
   status.textContent=value?'人物已就绪 · 正在操控':'人物已就绪 · 点击「操控人物」继续';if(!value&&window.gardenJoystick)window.gardenJoystick.reset();
-  if(!value&&mode!=='free'){if(seat)actor.position.set(seat.fx,actor.position.y,seat.fz);if(savedView&&api.setView){api.setView(savedView);savedView=null}seat=null;mode='free';actor.userData.faceAngle=null;currentName='';}
+  if(!value&&mode!=='free'){if(seat){const p=standSpot(seat);actor.position.set(p.x,actor.position.y,p.z)}if(savedView&&api.setView){api.setView(savedView);savedView=null}seat=null;mode='free';actor.userData.faceAngle=null;currentName='';}
   if(value){api.beginFollow(actor.position);renderer.domElement.focus({preventScroll:true});}else{play('idle');api.endFollow();}
  }
  function spawn(){clear();mode='free';seat=null;actor.userData.faceAngle=null;actor.position.set(0,.13,14.2);actor.rotation.y=Math.PI;idleTime=0;play('idle');if(active)api.beginFollow(actor.position);}
@@ -118,6 +124,8 @@ window.createGardenCharacter=function(api){
    const blocked=navigation.move(actor.position,desired.x*speed*dt,desired.z*speed*dt);
    const stateText=(window.gT||String)(blocked?'前方有障碍 · 请绕行':'人物已就绪 · 正在操控');if(status.textContent!==stateText)status.textContent=stateText;
    const walked=Math.hypot(actor.position.x-oldX,actor.position.z-oldZ)>1e-5;
+   // Unstick: pushing the stick but not moving for ~1s while inside a collider (or right after standing up) → nudge to the nearest free spot.
+   if(desired.lengthSq()&&blocked&&!walked){stuckTime+=dt;const inside=!allowed(actor.position.x,actor.position.z);if(stuckTime>1&&(inside||clock-stoodAt<4)){const p=freeSpot(actor.position.x,actor.position.z,inside?3:.6,Math.atan2(desired.x,desired.z));if(p&&(inside||Math.hypot(p.x-actor.position.x,p.z-actor.position.z)>.05)){actor.position.x=p.x;actor.position.z=p.z}stuckTime=0;stoodAt=-1e9}}else stuckTime=0;
    if(desired.lengthSq()){const angle=Math.atan2(desired.x,desired.z),delta=Math.atan2(Math.sin(angle-actor.rotation.y),Math.cos(angle-actor.rotation.y));actor.rotation.y+=delta*(1-Math.exp(-14*dt));}
    if(walked){idleTime=0;play(running?'run':'walk');}else{idleTime+=dt;play(idleTime>8?'look':'idle');}
    // Standing still in front of a bench: offer a seat; after a short pause he sits down by himself.

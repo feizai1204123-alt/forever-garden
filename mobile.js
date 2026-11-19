@@ -84,3 +84,19 @@ const st=document.getElementById('character-status');
 if(st&&window.GARDEN_MOBILE)new MutationObserver(()=>st.classList.toggle('quiet',/已就绪|ready/i.test(st.textContent))).observe(st,{childList:true,characterData:true,subtree:true});
 addEventListener('load',()=>{for(const b of document.querySelectorAll('footer button'))if(!b.id&&/创建宠物纪念|Create pet memorial/.test(b.textContent))b.id='create-memorial'});
 })();
+/* Reliable taps for HUD buttons on real phones: fire on touch pointerup (some mobile browsers drop the synthetic
+   click near the screen edge or after a gesture elsewhere), and swallow the duplicate click that may follow. */
+(()=>{
+ if(!window.GARDEN_MOBILE)return;
+ const SEL='#ambience button,.lang-toggle,footer button,#sit-prompt,#ritual-prompt,#splash button';
+ let down=null;
+ document.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;const b=e.target.closest&&e.target.closest(SEL);down=b?{b,x:e.clientX,y:e.clientY,t:Date.now(),id:e.pointerId}:null},true);
+ document.addEventListener('pointercancel',e=>{if(down&&e.pointerId===down.id)down=null},true);
+ document.addEventListener('pointerup',e=>{
+  const d=down;down=null;if(!d||e.pointerId!==d.id||d.b.disabled)return;
+  const r=d.b.getBoundingClientRect(),inside=e.clientX>=r.left-8&&e.clientX<=r.right+8&&e.clientY>=r.top-8&&e.clientY<=r.bottom+8;
+  if(!inside||Math.hypot(e.clientX-d.x,e.clientY-d.y)>12||Date.now()-d.t>900)return;
+  d.b._fastTap=Date.now();d.b.click();
+ },true);
+ document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest(SEL);if(b&&e.isTrusted&&b._fastTap&&Date.now()-b._fastTap<800){b._fastTap=0;e.preventDefault();e.stopImmediatePropagation()}},true);
+})();
