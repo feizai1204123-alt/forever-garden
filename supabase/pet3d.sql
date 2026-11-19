@@ -205,8 +205,10 @@ end;
 $$;
 
 revoke all on function public.pet3d_list() from public;
-revoke all on function public.pet3d_reserve(uuid, text, text, text, text, text, text, text) from public;
 grant execute on function public.pet3d_list() to anon, authenticated;
+-- CREATE FUNCTION also gets EXECUTE for anon/authenticated via Supabase default privileges.
+-- REVOKE FROM PUBLIC alone is not enough — visitors could call reserve directly and skip the Edge Function.
+revoke all on function public.pet3d_reserve(uuid, text, text, text, text, text, text, text) from public, anon, authenticated;
 -- reserve is for the Edge Function (service role) only
 grant execute on function public.pet3d_reserve(uuid, text, text, text, text, text, text, text) to service_role;
 
