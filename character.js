@@ -65,11 +65,14 @@ window.createGardenCharacter=function(api){
  }
  let SIT_OFFSET=.5,savedView=null,seatCooldown=null,preSit=null,stoodAt=-1e9,stuckTime=0;
  // Nearest walkable point to (x,z), searching rings outward; pref = preferred direction (radians, atan2(dx,dz)).
- function freeSpot(x,z,maxR,pref){if(allowed(x,z))return {x,z};for(let r=.1;r<=maxR+1e-6;r+=.1){const n=Math.max(8,Math.round(r*24));let best=null,bd=1e9;for(let i=0;i<n;i++){const a=i/n*Math.PI*2,px=x+Math.sin(a)*r,pz=z+Math.cos(a)*r;if(!allowed(px,pz))continue;const da=pref==null?0:Math.abs(Math.atan2(Math.sin(a-pref),Math.cos(a-pref)));if(da<bd){bd=da;best={x:px,z:pz}}}if(best)return best}return null}
+ function freeSpot(x,z,maxR,pref,ok){ok=ok||allowed;if(ok(x,z))return {x,z};for(let r=.1;r<=maxR+1e-6;r+=.1){const n=Math.max(8,Math.round(r*24));let best=null,bd=1e9;for(let i=0;i<n;i++){const a=i/n*Math.PI*2,px=x+Math.sin(a)*r,pz=z+Math.cos(a)*r;if(!ok(px,pz))continue;const da=pref==null?0:Math.abs(Math.atan2(Math.sin(a-pref),Math.cos(a-pref)));if(da<bd){bd=da;best={x:px,z:pz}}}if(best)return best}return null}
  // Where to stand after leaving a seat: straight in front if walkable, else where he stood before sitting, else the nearest free spot.
- function standSpot(st){for(const d of [.95,1.1,1.25,1.4,1.6,1.8]){const x=st.x+st.dir.x*d,z=st.z+st.dir.z*d;if(allowed(x,z))return {x,z}}
-  if(preSit&&allowed(preSit.x,preSit.z)&&Math.hypot(preSit.x-st.x,preSit.z-st.z)<3)return preSit;
-  return freeSpot(st.fx,st.fz,3,Math.atan2(st.dir.x,st.dir.z))||{x:st.fx,z:st.fz}}
+ // Inside the park: never on the far side of the entrance fence line (z 16.24) or outside the outer bounds.
+ const inPark=(x,z)=>z<16.24-radius&&z>-31&&x>-25.6&&x<25.6;
+ const okStand=(x,z)=>inPark(x,z)&&allowed(x,z);
+ function standSpot(st){for(const d of [.95,1.1,1.25,1.4,1.6,1.8,2.1]){const x=st.x+st.dir.x*d,z=st.z+st.dir.z*d;if(okStand(x,z))return {x,z}}
+  if(preSit&&okStand(preSit.x,preSit.z)&&Math.hypot(preSit.x-st.x,preSit.z-st.z)<3)return preSit;
+  return freeSpot(st.fx,st.fz,3,Math.atan2(st.dir.x,st.dir.z),okStand)||freeSpot(st.x,st.z,6,null,okStand)||{x:0,z:14.2}}
  findSeats();// now, before perf.js merges the bench meshes into batches
  function clear(){keys.clear();touchKeys.clear();speed=0;velocity.set(0,0,0);}
  function setActive(value){
@@ -125,7 +128,7 @@ window.createGardenCharacter=function(api){
    const stateText=(window.gT||String)(blocked?'前方有障碍 · 请绕行':'人物已就绪 · 正在操控');if(status.textContent!==stateText)status.textContent=stateText;
    const walked=Math.hypot(actor.position.x-oldX,actor.position.z-oldZ)>1e-5;
    // Unstick: pushing the stick but not moving for ~1s while inside a collider (or right after standing up) → nudge to the nearest free spot.
-   if(desired.lengthSq()&&blocked&&!walked){stuckTime+=dt;const inside=!allowed(actor.position.x,actor.position.z);if(stuckTime>1&&(inside||clock-stoodAt<4)){const p=freeSpot(actor.position.x,actor.position.z,inside?3:.6,Math.atan2(desired.x,desired.z));if(p&&(inside||Math.hypot(p.x-actor.position.x,p.z-actor.position.z)>.05)){actor.position.x=p.x;actor.position.z=p.z}stuckTime=0;stoodAt=-1e9}}else stuckTime=0;
+   if(desired.lengthSq()&&blocked&&!walked){stuckTime+=dt;const inside=!allowed(actor.position.x,actor.position.z);if(stuckTime>1&&(inside||clock-stoodAt<4)){const p=freeSpot(actor.position.x,actor.position.z,inside?3:.6,Math.atan2(desired.x,desired.z),inPark(actor.position.x,actor.position.z)?okStand:null);if(p&&(inside||Math.hypot(p.x-actor.position.x,p.z-actor.position.z)>.05)){actor.position.x=p.x;actor.position.z=p.z}stuckTime=0;stoodAt=-1e9}}else stuckTime=0;
    if(desired.lengthSq()){const angle=Math.atan2(desired.x,desired.z),delta=Math.atan2(Math.sin(angle-actor.rotation.y),Math.cos(angle-actor.rotation.y));actor.rotation.y+=delta*(1-Math.exp(-14*dt));}
    if(walked){idleTime=0;play(running?'run':'walk');}else{idleTime+=dt;play(idleTime>8?'look':'idle');}
    // Standing still in front of a bench: offer a seat; after a short pause he sits down by himself.

@@ -109,7 +109,7 @@ for(const side of [-1,1]){
  for(let j=0;j<15;j++){let y=range(.4,3.2),x=Math.sin(y*3)*.55;ell([x,y,.08],[.16,.23,.09],green,trellis);if(j%3===0)ell([x+.08,y+.1,.15],[.09,.09,.055],mat('#c09782'),trellis);}
 }
 function bench(x,z,a){const g=new T.Group();g.position.set(x,0,z);g.rotation.y=a;scene.add(g);solidObjects.push(g);for(let j=0;j<4;j++)cube([0,.62,(j-1.5)*.16],[2.3,.1,.12],woodLight,g);for(let j=0;j<3;j++)cube([0,.95+j*.18,-.32],[2.3,.12,.1],woodLight,g);for(const s of [-1,1]){for(const zz of [-.26,.26])cube([s*.88,.32,zz],[.1,.62,.1],metal,g);cube([s*1.06,.88,0],[.08,.08,.75],metal,g);cube([s*1.06,.7,.25],[.08,.35,.08],metal,g);cube([s*.88,.97,-.35],[.08,.9,.08],metal,g);}shadow(x,z,3,1.7,.3);}
-bench(-12.3,10.3,.08);bench(12.3,10.3,-.08);bench(-3.3,-11.9,.1);bench(3.3,-11.9,-.1);
+bench(-12.3,10.3,Math.PI-.08);bench(12.3,10.3,Math.PI+.08);/* entrance benches face into the garden */bench(-3.3,-11.9,.1);bench(3.3,-11.9,-.1);
 // A small water garden with stone rim, lily leaves and soft reflection.
 const pondX=-12.8,pondZ=-12.6;
 mesh(new T.CylinderGeometry(1.55,1.65,.18,48),darkStone,[pondX,.06,pondZ],[1.1,1,.85]);
