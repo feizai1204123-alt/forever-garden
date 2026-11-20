@@ -122,8 +122,11 @@ function onLoaded(){
  send('game_loaded',false);
 }
 const loading=document.getElementById('loading');
-if(!loading){
- if(window.garden)onLoaded();
+const isGame=!!(window.GARDEN_STATIC||loading||document.getElementById('scene'));
+if(!isGame){
+ // Landing pages only record visit.
+}else if(!loading){
+ if(window.garden&&typeof window.garden==='object'&&!window.garden.tagName)onLoaded();
 }else{
  const obs=new MutationObserver(()=>{
   if(!document.getElementById('loading')){obs.disconnect();onLoaded()}
