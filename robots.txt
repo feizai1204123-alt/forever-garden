@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://feizai1204123-alt.github.io/forever-garden/sitemap.xml

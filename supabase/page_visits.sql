@@ -22,7 +22,7 @@ create table if not exists public.page_visits (
   constraint page_visits_event_check
     check (event = any (array['visit','game_loaded','upload_opened','ritual_done'])),
   constraint page_visits_source_check
-    check (source = any (array['direct','xiaohongshu','tiktok','douyin','youtube','itch.io','reddit','x','facebook','producthunt','hn','other','test'])),
+    check (source = any (array['direct','xiaohongshu','tiktok','douyin','youtube','itch.io','reddit','x','facebook','producthunt','hn','other','test','seo-memorial','seo-remember'])),
   constraint page_visits_device_check
     check (device = any (array['mobile','desktop'])),
   constraint page_visits_lang_check
@@ -44,7 +44,7 @@ comment on table public.page_visits is
 comment on column public.page_visits.visitor_id is
   'Random anonymous id from the visitor''s localStorage (not a person or IP).';
 comment on column public.page_visits.source is
-  'xiaohongshu / tiktok / douyin / youtube / itch.io / reddit / x / facebook / producthunt / hn / direct / other / test.';
+  'xiaohongshu / tiktok / douyin / youtube / itch.io / reddit / x / facebook / producthunt / hn / seo-memorial / seo-remember / direct / other / test.';
 comment on column public.page_visits.event is
   'visit (page open), game_loaded, upload_opened, ritual_done.';
 
@@ -62,7 +62,7 @@ create policy page_visits_anon_insert
   with check (
     visitor_id ~ '^[A-Za-z0-9_-]{8,64}$'
     and event = any (array['visit','game_loaded','upload_opened','ritual_done'])
-    and source = any (array['direct','xiaohongshu','tiktok','douyin','youtube','itch.io','reddit','x','facebook','producthunt','hn','other','test'])
+    and source = any (array['direct','xiaohongshu','tiktok','douyin','youtube','itch.io','reddit','x','facebook','producthunt','hn','other','test','seo-memorial','seo-remember'])
     and device = any (array['mobile','desktop'])
     and (lang is null or lang = any (array['zh','en']))
     and (page_path is null or (char_length(page_path) <= 200 and page_path like '/%' and page_path !~ '[?#]'))

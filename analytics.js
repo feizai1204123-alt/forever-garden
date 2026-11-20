@@ -8,7 +8,7 @@ const qs=new URLSearchParams(location.search);
 if(!SH.url||!SH.key||qs.get('analytics')==='0')return;
 
 const VID_KEY='pmg-visitor-id';
-const SHORT={xhs:'xiaohongshu',xiaohongshu:'xiaohongshu',red:'xiaohongshu',tt:'tiktok',tiktok:'tiktok',dy:'douyin',douyin:'douyin',yt:'youtube',youtube:'youtube',itch:'itch.io','itch.io':'itch.io',reddit:'reddit',x:'x',twitter:'x',fb:'facebook',facebook:'facebook',ph:'producthunt',producthunt:'producthunt',hn:'hn',test:'test'};
+const SHORT={xhs:'xiaohongshu',xiaohongshu:'xiaohongshu',red:'xiaohongshu',tt:'tiktok',tiktok:'tiktok',dy:'douyin',douyin:'douyin',yt:'youtube',youtube:'youtube',itch:'itch.io','itch.io':'itch.io',reddit:'reddit',x:'x',twitter:'x',fb:'facebook',facebook:'facebook',ph:'producthunt',producthunt:'producthunt',hn:'hn',test:'test','seo-memorial':'seo-memorial','seo-remember':'seo-remember',memorial:'seo-memorial',remember:'seo-remember'};
 const HOSTS=[
   [/^(?:www\.)?(?:xiaohongshu\.com|xhslink\.com)$/,'xiaohongshu'],
   [/^(?:www\.)?(?:tiktok\.com|tiktokv\.com)$/,'tiktok'],
