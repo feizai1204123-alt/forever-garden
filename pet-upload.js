@@ -317,7 +317,7 @@ preview.querySelector('.do-confirm').onclick=async()=>{
 if(btn){btn.hidden=true;btn.style.display='none'}// one footer button: memorial-editor's「创建宠物纪念」routes here via gardenPet3d.openCreate
 const CAP_KEY='pmg-pet3d-cap',month=()=>new Date().toISOString().slice(0,7);
 function capReached(){try{return localStorage.getItem(CAP_KEY)===month()}catch(_){return false}}
-function openCreateChecked(spot){if(capReached()){showToast(MESSAGES.month_limit,null);return}return openCreate(spot)}
+function openCreateChecked(spot){try{window.gardenAnalytics&&window.gardenAnalytics.event('upload_opened')}catch(_){}if(capReached()){showToast(MESSAGES.month_limit,null);return}return openCreate(spot)}
 function jobForGroup(group){const s=allSlots.find(s=>s.group===group);return s?jobs.get(s.spot):null}
 const canvas=g.renderer.domElement;let down=null;
 canvas.addEventListener('pointerdown',e=>{down=[e.clientX,e.clientY]});

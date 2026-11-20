@@ -159,6 +159,7 @@ function open(s,fromKeyboard){
 function close(){if(panel.hidden)return;const hadFocus=panel.contains(document.activeElement);panel.hidden=true;current=null;if(hadFocus)canvas.focus({preventScroll:true})}
 panel.querySelector('.ritual-close').onclick=close;
 async function offer(kind,message){
+ try{window.gardenAnalytics&&window.gardenAnalytics.event('ritual_done')}catch(_){}
  const s=current;if(!s)return;try{navigator.vibrate&&navigator.vibrate(kind==='candle'?[20,40,20]:30)}catch(_){}
  try{const c=g.controller;if(c&&c.active&&c.perform){const d=Math.hypot(c.actor.position.x-s.root.position.x,c.actor.position.z-s.root.position.z);if(d<s.radius+3)c.perform(kind==='flower'?'bow':kind==='candle'?'kneel':'pickup',{face:s.root.position})}}catch(_){}// the gardener bows / kneels / bends down to place the note
  if(shared)return offerShared(s,kind,message);
